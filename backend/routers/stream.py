@@ -1,104 +1,116 @@
 """
-RTSP 视频流 API 端点（基于 OpenCV + MJPEG）
+视频流接口。
 
-提供三种接口：
-  1. MJPEG 流:  GET /api/devices/{device_id}/stream
-     - 返回 multipart/x-mixed-replace 格式的连续 JPEG 帧
-     - 浏览器 <img> 标签可直接显示
-     - 适用于实时监控和大屏展示
-
-  2. 单帧快照:  GET /api/devices/{device_id}/snapshot
-     - 返回单张 JPEG 图片
-     - 适用于设备缩略图、状态检查
-     - 支持缓存控制
-
-  3. 流状态:   GET /api/devices/{device_id}/stream/status
-     - 返回 JSON 格式的流状态信息
-
-技术方案：
-  OpenCV VideoCapture → JPEG编码 → HTTP响应
-
-  相比 FFmpeg + mpegts.js 方案：
-  - 不需要额外的 JS 库
-  - 不需要 MSE (Media Source Extensions)
-  - 浏览器原生支持 MJPEG（<img> 标签直接用）
-  - 更简单、更稳定、更兼容
-  - 延迟约 100-300ms（满足实时监控需求）
-
-  注意事项：
-  - MJPEG 不包含音频（客流统计系统不需要音频）
-  - 带宽消耗略高于 H.264（但摄像头数量有限，可接受）
-  - 需要安装 opencv-python-headless（无需 GUI 依赖）
+当前方案：
+1. WebSocket 推送二进制 JPEG 帧，作为实时预览主路径。
+2. Snapshot 提供单帧降级能力。
+3. 保留 MJPEG HTTP 流，兼容旧调用。
 """
+
 import asyncio
 import logging
 import time
 import uuid
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse, Response
+
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response, StreamingResponse
 
 from database import get_session_factory
 from models import Device
-from utils import success_response, error_response
 from stream_manager import stream_manager
+from utils import error_response, success_response
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/devices", tags=["视频流"])
 
-# MJPEG 边界字符串
 MJPEG_BOUNDARY = b"--frameboundary"
+WS_FRAME_INTERVAL = 1 / 15
+
+
+def _get_device(device_id: str):
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        return session.query(Device).filter(Device.id == device_id).first()
+
+
+def _ensure_stream_started(device_id: str, rtsp_url: str, client_id: str) -> bool:
+    already_running = stream_manager.add_client(device_id, client_id)
+    if already_running:
+        return True
+
+    started = stream_manager.start_camera(device_id, rtsp_url)
+    if not started:
+        stream_manager.remove_client(device_id, client_id)
+        return False
+    return True
+
+
+@router.websocket("/{device_id}/stream/ws")
+async def get_device_stream_ws(websocket: WebSocket, device_id: str):
+    """通过 WebSocket 推送二进制 JPEG 帧。"""
+    device = _get_device(device_id)
+    if not device:
+        await websocket.close(code=1008, reason="设备不存在")
+        return
+
+    await websocket.accept()
+    client_id = f"ws_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+
+    if not _ensure_stream_started(device_id, device.rtspUrl, client_id):
+        await websocket.close(code=1011, reason="无法连接摄像头")
+        return
+
+    logger.info(f"[视频流] WebSocket 已连接: 设备={device.name}({device_id}), 客户端={client_id}")
+    last_frame_count = -1
+
+    try:
+        while True:
+            jpeg_bytes, frame_count = await asyncio.get_event_loop().run_in_executor(
+                None,
+                stream_manager.get_jpeg_frame_with_meta,
+                device_id,
+            )
+
+            if jpeg_bytes and frame_count != last_frame_count:
+                await websocket.send_bytes(jpeg_bytes)
+                last_frame_count = frame_count
+
+            await asyncio.sleep(WS_FRAME_INTERVAL)
+    except WebSocketDisconnect:
+        logger.info(f"[视频流] WebSocket 已断开: 设备={device.name}({device_id}), 客户端={client_id}")
+    except Exception as e:
+        logger.error(f"[视频流] WebSocket 推流异常: 设备={device_id}, 错误={e}")
+    finally:
+        stream_manager.remove_client(device_id, client_id)
 
 
 @router.get("/{device_id}/stream")
 async def get_device_stream(device_id: str, request: Request):
-    """
-    获取设备 RTSP 实时视频流（MJPEG 格式）
+    """兼容旧版 MJPEG 流接口。"""
+    device = _get_device(device_id)
+    if not device:
+        return error_response("设备不存在", 404)
 
-    浏览器端使用方法：
-      <img src="/api/devices/{deviceId}/stream" />
+    client_id = f"http_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+    if not _ensure_stream_started(device_id, device.rtspUrl, client_id):
+        return error_response("无法连接摄像头", 500)
 
-    该端点返回 multipart/x-mixed-replace 格式的连续 JPEG 帧，
-    浏览器 <img> 标签会自动更新显示最新帧。
-    """
-    # 1. 查找设备信息
-    SessionFactory = get_session_factory()
-    with SessionFactory() as session:
-        device = session.query(Device).filter(Device.id == device_id).first()
-        if not device:
-            return error_response("设备不存在", 404)
-        rtsp_url = device.rtspUrl
-        device_name = device.name
-
-    # 2. 注册客户端
-    client_id = f"{uuid.uuid4().hex[:8]}_{int(time.time())}"
-    already_running = stream_manager.add_client(device_id, client_id)
-
-    if not already_running:
-        # 启动摄像头采集
-        started = stream_manager.start_camera(device_id, rtsp_url)
-        if not started:
-            stream_manager.remove_client(device_id, client_id)
-            return error_response("无法连接摄像头", 500)
-
-    logger.info(f"[视频流] 新连接: 设备={device_name}({device_id}), 客户端={client_id}")
+    logger.info(f"[视频流] MJPEG 已连接: 设备={device.name}({device_id}), 客户端={client_id}")
 
     async def generate_mjpeg():
-        """生成 MJPEG 流（multipart/x-mixed-replace 格式）"""
         try:
             while True:
-                # 检查客户端是否断开
                 if await request.is_disconnected():
-                    logger.info(f"[视频流] 客户端 {client_id} 断开连接")
                     break
 
-                # 获取 JPEG 帧
                 jpeg_bytes = await asyncio.get_event_loop().run_in_executor(
-                    None, stream_manager.get_jpeg_frame, device_id
+                    None,
+                    stream_manager.get_jpeg_frame,
+                    device_id,
                 )
 
                 if jpeg_bytes:
-                    # MJPEG 格式: boundary + Content-Type + 空行 + JPEG数据 + \r\n
                     yield (
                         MJPEG_BOUNDARY + b"\r\n"
                         b"Content-Type: image/jpeg\r\n"
@@ -106,16 +118,9 @@ async def get_device_stream(device_id: str, request: Request):
                         b"\r\n" + jpeg_bytes + b"\r\n"
                     )
 
-                # 控制帧率 (~25fps)
-                await asyncio.sleep(0.04)
-
-        except asyncio.CancelledError:
-            logger.info(f"[视频流] 生成器取消: 设备={device_name}")
-        except Exception as e:
-            logger.error(f"[视频流] 生成器异常: {e}")
+                await asyncio.sleep(WS_FRAME_INTERVAL)
         finally:
             stream_manager.remove_client(device_id, client_id)
-            logger.info(f"[视频流] 客户端 {client_id} 已清理")
 
     return StreamingResponse(
         generate_mjpeg(),
@@ -132,32 +137,21 @@ async def get_device_stream(device_id: str, request: Request):
 
 @router.get("/{device_id}/snapshot")
 async def get_device_snapshot(device_id: str):
-    """
-    获取设备当前画面快照（单张 JPEG）
+    """返回当前设备的单帧 JPEG。"""
+    device = _get_device(device_id)
+    if not device:
+        return error_response("设备不存在", 404)
 
-    返回当前摄像头的最新一帧画面，用于：
-    - 设备列表缩略图
-    - 设备状态检查
-    - 手动刷新画面
-    """
-    # 查找设备
-    SessionFactory = get_session_factory()
-    with SessionFactory() as session:
-        device = session.query(Device).filter(Device.id == device_id).first()
-        if not device:
-            return error_response("设备不存在", 404)
-
-    # 如果没有正在采集，临时启动
     if not stream_manager.is_streaming(device_id):
         client_id = f"snap_{uuid.uuid4().hex[:8]}"
         stream_manager.add_client(device_id, client_id)
         stream_manager.start_camera(device_id, device.rtspUrl)
-        # 等待第一帧
         await asyncio.sleep(1.0)
 
-    # 获取 JPEG 帧
     jpeg_bytes = await asyncio.get_event_loop().run_in_executor(
-        None, stream_manager.get_jpeg_frame, device_id
+        None,
+        stream_manager.get_jpeg_frame,
+        device_id,
     )
 
     if not jpeg_bytes:
@@ -175,7 +169,7 @@ async def get_device_snapshot(device_id: str):
 
 
 def _create_minimal_jpeg() -> bytes:
-    """创建一个最小的有效 JPEG 图片（1x1 黑色像素）"""
+    """返回一个最小可显示的 JPEG。"""
     return bytes([
         0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
         0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00,
@@ -192,10 +186,9 @@ def _create_minimal_jpeg() -> bytes:
 
 @router.get("/{device_id}/stream/status")
 async def get_stream_status(device_id: str):
-    """获取设备视频流状态"""
+    """返回当前设备流状态。"""
     info = stream_manager.get_stream_info(device_id)
 
-    # 检查 OpenCV 是否可用
     try:
         import cv2
         opencv_version = cv2.__version__

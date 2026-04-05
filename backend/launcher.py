@@ -7,15 +7,25 @@ FluxaVision 客流统计系统 - 入口启动器
 import sys
 import os
 
+# ── PyInstaller console=False 模式下 stdout/stderr 为 None ──────────────────
+# uvicorn 的 DefaultFormatter.__init__ 会调用 sys.stdout.isatty()，
+# None 无此方法，直接抛 AttributeError → ValueError: Unable to configure formatter。
+# 必须在所有 import 之前将其替换为可用的空流。
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w', encoding='utf-8')
+
 # 确保 backend 目录在 Python 路径中
 if getattr(sys, 'frozen', False):
-    # PyInstaller onedir: 添加 exe 所在目录
     sys.path.insert(0, os.path.dirname(sys.executable))
 else:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import logging
 import argparse
+import threading
+
 
 # ==================== 命令行参数解析 ====================
 def parse_args():
@@ -48,20 +58,21 @@ def main():
     # 单实例检查
     from windows_service import check_single_instance
     if not check_single_instance():
-        # 如果已有实例运行，尝试打开浏览器
-        from config import API_PORT
-        try:
-            import webbrowser
-            webbrowser.open(f"http://127.0.0.1:{API_PORT}")
-        except Exception:
-            pass
+        # 已有实例运行，直接退出（静默，不弹浏览器）
         sys.exit(0)
+
+    # 首次运行自动注册开机自启（仅 exe 模式，已注册则跳过）
+    from windows_service import ensure_autostart
+    ensure_autostart()
 
     # 配置日志
     from config import LOG_FILE, DATA_DIR
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    log_handlers = [logging.StreamHandler(sys.stdout)]
+    # 无窗口模式下 sys.stdout 已被替换为空流，只保留文件日志
+    log_handlers = []
+    if args.console:
+        log_handlers.append(logging.StreamHandler(sys.stdout))
     try:
         file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
         file_handler.setFormatter(logging.Formatter(
@@ -87,26 +98,20 @@ def main():
     logger = logging.getLogger("FluxaVision")
     logger.info("FluxaVision 客流统计系统启动中...")
 
-    # 非控制台模式下，自动打开浏览器
-    if not args.console:
-        from windows_service import auto_open_browser, setup_windows_tray
-        auto_open_browser(API_PORT)
+    # Windows 非控制台模式：启动托盘图标（后台线程）
+    if sys.platform == "win32" and not args.console:
+        from windows_service import setup_windows_tray
+        try:
+            import pystray
+            from PIL import Image  # noqa: F401
+            tray_thread = threading.Thread(
+                target=setup_windows_tray, args=(API_PORT,), daemon=True
+            )
+            tray_thread.start()
+        except ImportError:
+            pass
 
-        # 在 Windows 非控制台模式下启动托盘（在子线程中）
-        if sys.platform == "win32" and not args.console:
-            tray_thread = None
-            try:
-                import pystray
-                from PIL import Image  # noqa: F401
-                tray_thread = threading.Thread(
-                    target=setup_windows_tray, args=(API_PORT,), daemon=True
-                )
-                tray_thread.start()
-            except ImportError:
-                pass
-    import threading
-
-    # 启动 Uvicorn
+    # 启动 Uvicorn（静默，不弹浏览器）
     uvicorn.run(
         app,
         host=API_HOST,

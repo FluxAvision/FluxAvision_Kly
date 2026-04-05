@@ -10,17 +10,22 @@ import {
   Camera,
   CalendarDays,
   Hash,
+  Store,
+  BarChart3,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Cell,
 } from 'recharts'
 
 interface MetricCardProps {
@@ -62,6 +67,18 @@ interface HourlyData {
   countOut: number
 }
 
+interface DeviceTodayData {
+  deviceId: string
+  deviceName: string
+  deviceIp: string
+  deviceLocation: string
+  deviceStatus: string
+  todayIn: number
+  todayOut: number
+  currentInside: number
+  percentage: number
+}
+
 interface DeviceStatus {
   id: string
   name: string
@@ -72,16 +89,21 @@ interface DeviceStatus {
 }
 
 interface DashboardApiData {
-  todayIn: number
-  todayOut: number
-  currentIn: number
-  weekIn: number
-  weekOut: number
-  monthIn: number
-  monthOut: number
-  totalIn: number
-  totalOut: number
+  storeName: string
+  storeTotal: {
+    todayIn: number
+    todayOut: number
+    currentIn: number
+    weekIn: number
+    weekOut: number
+    monthIn: number
+    monthOut: number
+    totalIn: number
+    totalOut: number
+  }
+  devicesToday: DeviceTodayData[]
   hourlyToday: HourlyData[]
+  peakHour: number | null
   devices: DeviceStatus[]
 }
 
@@ -111,6 +133,9 @@ const defaultHourlyData = Array.from({ length: 24 }, (_, i) => ({
   countOut: 0,
 }))
 
+// 设备分栏柱状图颜色
+const DEVICE_COLORS = ['#00d9ff', '#00ff88', '#ff9500', '#a855f7', '#f43f5e', '#06b6d4', '#f97316', '#10b981']
+
 export default function Dashboard({ dashboardMetrics }: DashboardProps) {
   const [data, setData] = useState<DashboardApiData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -137,34 +162,55 @@ export default function Dashboard({ dashboardMetrics }: DashboardProps) {
     return () => clearInterval(interval)
   }, [])
 
+  const storeName = data?.storeName || '我的门店'
+  const storeTotal = data?.storeTotal
   const metrics = dashboardMetrics ? dashboardMetrics.split(',') : ['todayIn', 'todayOut', 'currentIn', 'weekIn']
-  const hourlyData = data?.hourlyToday?.map(h => ({ ...h, hour: `${h.hour}:00` })) || defaultHourlyData.map(h => ({ ...h, hour: `${h.hour}:00` }))
+  const hourlyData = (data?.hourlyToday || defaultHourlyData).map(h => ({
+    ...h,
+    hour: `${String(h.hour).padStart(2, '0')}:00`,
+  }))
   const devices = data?.devices || []
+  const devicesToday = data?.devicesToday || []
+  const peakHour = data?.peakHour
 
   return (
     <div className="space-y-6">
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((key) => {
-          const config = metricConfig[key]
-          if (!config) return null
-          const value = data ? (data as any)[key] || 0 : 0
-          return (
-            <MetricCard
-              key={key}
-              label={config.label}
-              value={value}
-              icon={config.icon}
-              bgColor={config.bgColor}
-              loading={loading}
-            />
-          )
-        })}
+      {/* 门店名称 + 指标卡片 */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Store className="w-4 h-4 text-[#00d9ff]" />
+          <h2 className="text-lg font-medium text-white">{storeName}</h2>
+          <span className="text-xs text-[#8892a0]">· 门店汇总</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {metrics.map((key) => {
+            const config = metricConfig[key]
+            if (!config) return null
+            const value = storeTotal ? (storeTotal as any)[key] || 0 : 0
+            return (
+              <MetricCard
+                key={key}
+                label={config.label}
+                value={value}
+                icon={config.icon}
+                bgColor={config.bgColor}
+                loading={loading}
+              />
+            )
+          })}
+        </div>
       </div>
 
-      {/* Hourly Trend Chart */}
+      {/* 今日客流趋势 (门店汇总) */}
       <div className="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-        <h3 className="text-white font-medium mb-4">今日客流趋势</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-medium">今日客流趋势</h3>
+          {peakHour !== null && peakHour !== undefined && (
+            <span className="text-xs text-[#8892a0]">
+              高峰时段: <span className="text-[#ff9500] font-medium">{String(peakHour).padStart(2, '0')}:00</span>
+            </span>
+          )}
+        </div>
         {loading ? (
           <Skeleton className="h-[300px] w-full bg-[#1e293b]" />
         ) : (
@@ -197,12 +243,12 @@ export default function Dashboard({ dashboardMetrics }: DashboardProps) {
                 }}
                 formatter={(value: number, name: string) => [
                   value.toLocaleString(),
-                  name === 'countIn' ? '进入' : '出去',
+                  name === 'countIn' ? '进人数' : '出人数',
                 ]}
               />
               <Legend
                 formatter={(value: string) =>
-                  value === 'countIn' ? '进入' : '出去'
+                  value === 'countIn' ? '进人数' : '出人数'
                 }
                 wrapperStyle={{ color: '#8892a0' }}
               />
@@ -227,7 +273,127 @@ export default function Dashboard({ dashboardMetrics }: DashboardProps) {
         )}
       </div>
 
-      {/* Device Status */}
+      {/* 各设备今日客流分栏明细 */}
+      {devicesToday.length > 0 && (
+        <div className="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-white font-medium">各设备今日客流</h3>
+              <p className="text-xs text-[#8892a0] mt-0.5">门店客流由 {devicesToday.length} 台设备汇总得出</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4 text-[#8892a0]" />
+              <span className="text-xs text-[#8892a0]">柱状对比</span>
+            </div>
+          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24 w-full bg-[#1e293b] rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* 设备卡片列表 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                {devicesToday.map((dev, idx) => (
+                  <div
+                    key={dev.deviceId}
+                    className="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 card-hover"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length] }}
+                        />
+                        <span className="text-sm text-white font-medium truncate">
+                          {dev.deviceName}
+                        </span>
+                      </div>
+                      <span className="text-xs text-[#8892a0]">
+                        占比 {dev.percentage}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-lg font-bold text-[#00d9ff]">
+                            {dev.todayIn.toLocaleString()}
+                          </span>
+                          <span className="text-[10px] text-[#8892a0]">进</span>
+                        </div>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <span className="text-sm text-[#00ff88]">
+                            {dev.todayOut.toLocaleString()}
+                          </span>
+                          <span className="text-[10px] text-[#8892a0]">出</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-[#8892a0]">在场</p>
+                        <p className="text-sm font-medium text-[#4a9eff]">
+                          {dev.currentInside}
+                        </p>
+                      </div>
+                    </div>
+                    {/* 占比进度条 */}
+                    <div className="mt-2 h-1.5 bg-[#1e293b] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${dev.percentage}%`,
+                          backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length],
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 各设备进入人数柱状图对比 */}
+              {devicesToday.length > 1 && (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={devicesToday.map((d, i) => ({
+                    name: d.deviceName,
+                    countIn: d.todayIn,
+                    countOut: d.todayOut,
+                    color: DEVICE_COLORS[i % DEVICE_COLORS.length],
+                  }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="name" stroke="#8892a0" tick={{ fontSize: 11 }} />
+                    <YAxis stroke="#8892a0" tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#172a45',
+                        border: '1px solid #1e293b',
+                        borderRadius: '8px',
+                        color: '#ffffff',
+                      }}
+                      formatter={(value: number, name: string) => [
+                        value.toLocaleString(),
+                        name === 'countIn' ? '进人数' : '出人数',
+                      ]}
+                    />
+                    <Bar dataKey="countIn" radius={[4, 4, 0, 0]} name="countIn">
+                      {devicesToday.map((_, index) => (
+                        <Cell key={index} fill={DEVICE_COLORS[index % DEVICE_COLORS.length]} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="countOut" radius={[4, 4, 0, 0]} name="countOut" opacity={0.6}>
+                      {devicesToday.map((_, index) => (
+                        <Cell key={index} fill={DEVICE_COLORS[index % DEVICE_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 设备在线状态 */}
       <div className="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-white font-medium">设备状态</h3>

@@ -1,15 +1,17 @@
 """
-FluxaVision 客流统计系统 - SQLCipher 加密数据库连接
+FluxaVision 客流统计系统 - 数据库连接模块
 
-使用 SQLCipher 对 SQLite 数据库进行 AES-256 透明加密。
+使用 Python 内置 sqlite3 + 应用层 AES-256 字段加密。
 加密密钥由 config.py 管理，绑定硬件指纹。
 
 安全架构：
-- 数据库文件：AES-256 加密（SQLCipher 4）
+- 敏感字段：AES-256-CBC 加密（通过 field_crypto 模块）
 - 加密密钥：通过硬件指纹 + 随机盐值派生，存储在加密密钥文件中
-- 防拷贝：数据库和密钥文件均绑定到当前硬件，无法在其他机器使用
+- 防拷贝：密钥文件绑定到当前硬件，无法在其他机器使用
+- 数据库文件：标准 SQLite3（WAL模式），敏感字段均为密文存储
 """
 import logging
+import sqlite3
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from config import DB_PATH, DB_ENCRYPTION_KEY
@@ -21,49 +23,37 @@ class Base(DeclarativeBase):
     pass
 
 
-def _set_sqlcipher_pragmas(dbapi_conn, connection_record):
-    """连接后设置 SQLCipher 加密参数"""
+def _set_sqlite_pragmas(dbapi_conn, connection_record):
+    """连接后设置 SQLite 优化参数"""
     cursor = dbapi_conn.cursor()
-    # 设置加密密钥（使用字符串密码方式）
-    cursor.execute(f"PRAGMA key = '{DB_ENCRYPTION_KEY}'")
-    # 3. 验证数据库是否可以正常解密
-    try:
-        cursor.execute("SELECT count(*) FROM sqlite_master")
-    except Exception as e:
-        raise RuntimeError(f"数据库解密失败: {e}")
-    # 4. 性能和安全配置
-    cursor.execute("PRAGMA cipher_page_size = 4096")
-    cursor.execute("PRAGMA kdf_iter = 256000")
     cursor.execute("PRAGMA foreign_keys = ON")
     cursor.execute("PRAGMA journal_mode = WAL")
     cursor.execute("PRAGMA synchronous = NORMAL")
+    cursor.execute("PRAGMA cache_size = -8000")  # 8MB 缓存
+    cursor.execute("PRAGMA busy_timeout = 5000")  # 5秒忙等待
     cursor.close()
 
 
 def get_engine():
     """
-    创建 SQLCipher 引擎
-    
-    使用 'sqlite://' 前缀（不是 pysqlcipher://）避免 SQLAlchemy 内置
-    的 pysqlcipher 方言自动处理 PRAGMA key（与我们的自定义事件冲突）
+    创建 SQLite3 引擎
+
+    使用 Python 内置 sqlite3 模块（无需额外安装），配合
+    field_crypto 模块实现敏感字段 AES-256 加密。
     """
-    import sqlcipher3
-    
-    # 使用 sqlite:// 前缀 + module=sqlcipher3 的方式
-    # 这样 SQLAlchemy 不会自动处理 PRAGMA key，由我们的事件处理器统一管理
     connect_url = f"sqlite:///{DB_PATH}"
-    
+
     engine = create_engine(
         connect_url,
-        module=sqlcipher3,
+        module=sqlite3,
         connect_args={"check_same_thread": False},
         echo=False,
         pool_pre_ping=True,
     )
-    
-    # 注册连接事件：每次连接时设置 SQLCipher 加密参数
-    event.listen(engine, "connect", _set_sqlcipher_pragmas)
-    
+
+    # 注册连接事件：每次连接时设置优化参数
+    event.listen(engine, "connect", _set_sqlite_pragmas)
+
     return engine
 
 
@@ -100,7 +90,7 @@ def init_database():
     Base.metadata.create_all(bind=engine)
     _migrate_database(engine)
     logger.info(f"✓ 数据库初始化完成: {DB_PATH}")
-    logger.info(f"✓ 加密方式: SQLCipher AES-256 (密钥长度: {len(DB_ENCRYPTION_KEY)} hex chars)")
+    logger.info(f"✓ 加密方式: AES-256 字段加密 (密钥长度: {len(DB_ENCRYPTION_KEY)} hex chars)")
     return engine
 
 

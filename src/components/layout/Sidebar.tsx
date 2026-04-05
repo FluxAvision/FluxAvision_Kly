@@ -40,7 +40,7 @@ export default function Sidebar({
       <div className="flex items-center gap-3 px-6 h-16 border-b border-[#1e293b] flex-shrink-0">
         <Image src="/logo.png" alt="FluxaVision" width={32} height={32} className="rounded-lg" />
         <span className="text-lg font-bold text-white tracking-wide">
-          FluxaVision
+          FluxAvision
         </span>
       </div>
 
@@ -106,7 +106,7 @@ export default function Sidebar({
 
       {/* Version */}
       <div className="px-6 pb-4 flex-shrink-0">
-        <p className="text-xs text-[#8892a0]/50">FluxaVision v2.1.0</p>
+        <p className="text-xs text-[#8892a0]/50">FluxAvision v2.1.0</p>
       </div>
     </aside>
   )

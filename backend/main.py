@@ -7,12 +7,12 @@ FluxaVision 客流统计系统 - Python 后端主入口
 
 技术栈：
   - FastAPI (高性能异步Web框架)
-  - SQLCipher (AES-256 数据库加密)
+  - SQLite3 + AES-256 字段加密 (cryptography)
   - SQLAlchemy (ORM)
   - Uvicorn (ASGI服务器)
 
 安全特性：
-  - 数据库使用 SQLCipher AES-256 透明加密
+  - 数据库使用 AES-256 字段级透明加密（敏感字段自动加解密）
   - 加密密钥绑定硬件指纹，防止数据库被拷贝到其他机器使用
   - 密钥文件使用二次AES加密存储
 """
@@ -20,6 +20,7 @@ import logging
 import sys
 import os
 import threading
+from contextlib import asynccontextmanager
 
 # 将 backend 目录加入 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -41,13 +42,73 @@ logging.basicConfig(
 )
 logger = logging.getLogger("FluxaVision")
 
+
+# ==================== 生命周期管理 ====================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用启动/关闭生命周期管理"""
+    # ── 启动 ──
+    logger.info("=" * 60)
+    logger.info("  FluxaVision 客流统计系统 v2.0.0")
+    logger.info("  数据库加密: SQLite3 + AES-256 字段加密")
+    logger.info("  视频流: RTSP → OpenCV MJPEG")
+    logger.info("=" * 60)
+
+    try:
+        engine = init_database()
+        logger.info("✓ 数据库初始化完成 (AES-256 字段加密)")
+    except Exception as e:
+        logger.error(f"✗ 数据库初始化失败: {e}")
+        raise
+
+    # 启动视频流管理器
+    from stream_manager import stream_manager
+    stream_manager.start()
+    logger.info("✓ 视频流管理器已启动 (OpenCV MJPEG)")
+
+    # 自动启动所有大华设备的客流采集
+    try:
+        from dahua_collector import dahua_collector
+        if dahua_collector.available:
+            dahua_collector.start_all_from_db()
+            logger.info("✓ 大华SDK客流采集服务已启动")
+        else:
+            logger.info("○ 大华NetSDK不可用 (非Windows环境或未安装)")
+    except Exception as e:
+        logger.warning(f"○ 大华SDK启动失败: {e}")
+
+    # 挂载静态文件
+    has_static = _mount_static_files()
+    if has_static:
+        logger.info(f"✓ 静态前端已挂载: http://{API_HOST}:{API_PORT}")
+    else:
+        logger.info("✓ API模式启动: http://{API_HOST}:{API_PORT}")
+
+    logger.info("=" * 60)
+
+    yield  # 应用运行中...
+
+    # ── 关闭 ──
+    from stream_manager import stream_manager
+    stream_manager.stop()
+    logger.info("✓ 视频流管理器已停止")
+
+    try:
+        from dahua_collector import dahua_collector
+        dahua_collector.stop_all()
+        logger.info("✓ 客流采集器已停止")
+    except Exception:
+        pass
+
+
 # ==================== FastAPI 应用 ====================
 app = FastAPI(
     title="FluxaVision 客流统计系统",
-    description="基于 Python FastAPI + SQLCipher 加密数据库的后端API",
+    description="基于 Python FastAPI + SQLite3 + AES-256 字段加密的后端API",
     version="2.0.0",
-    docs_url=None,  # 生产环境禁用Swagger文档
+    docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 # CORS 中间件配置
@@ -143,13 +204,11 @@ def _mount_static_files():
         async def favicon():
             return FileResponse(favicon_path)
 
-    # logo.png - Next.js 静态导出时在 out/ 根目录或 out/public/ 目录
+    # logo.png
     logo_path = None
-    # 优先检查 static_dir 根目录
     logo_in_root = os.path.join(static_dir, "logo.png")
     if os.path.exists(logo_in_root):
         logo_path = logo_in_root
-    # 然后检查 public 子目录
     elif public_dir:
         logo_in_public = os.path.join(public_dir, "logo.png")
         if os.path.exists(logo_in_public):
@@ -160,75 +219,16 @@ def _mount_static_files():
         async def logo():
             return FileResponse(logo_path)
 
-    # SPA fallback: 所有未匹配的路径返回 index.html
+    # SPA fallback
     index_html_path = os.path.join(static_dir, "index.html")
     if os.path.exists(index_html_path):
         @app.get("/{path:path}")
         async def spa_catch_all(request: Request, path: str):
-            # 跳过已注册的 API 路由
             if path.startswith("api/"):
                 return JSONResponse(status_code=404, content={"success": False, "message": "API not found"})
             return FileResponse(index_html_path)
 
     return True
-
-
-# ==================== 启动事件 ====================
-@app.on_event("startup")
-async def startup_event():
-    logger.info("=" * 60)
-    logger.info("  FluxaVision 客流统计系统 v2.0.0")
-    logger.info("  数据库加密: SQLCipher AES-256")
-    logger.info("  视频流: RTSP → OpenCV MJPEG")
-    logger.info("=" * 60)
-
-    try:
-        engine = init_database()
-        logger.info("✓ 数据库初始化完成 (SQLCipher 加密)")
-    except Exception as e:
-        logger.error(f"✗ 数据库初始化失败: {e}")
-        raise
-
-    # 启动视频流管理器
-    from stream_manager import stream_manager
-    await stream_manager.start()
-    logger.info("✓ 视频流管理器已启动 (OpenCV MJPEG)")
-
-    # 自动启动所有大华设备的客流采集
-    try:
-        from dahua_collector import dahua_collector
-        if dahua_collector.available:
-            dahua_collector.start_all_from_db()
-            logger.info("✓ 大华SDK客流采集服务已启动")
-        else:
-            logger.info("○ 大华NetSDK不可用 (非Windows环境或未安装)")
-    except Exception as e:
-        logger.warning(f"○ 大华SDK启动失败: {e}")
-
-    # 挂载静态文件
-    has_static = _mount_static_files()
-    if has_static:
-        logger.info(f"✓ 静态前端已挂载: http://{API_HOST}:{API_PORT}")
-    else:
-        logger.info("✓ API模式启动: http://{API_HOST}:{API_PORT}")
-
-    logger.info("=" * 60)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    # 停止所有视频流
-    from stream_manager import stream_manager
-    await stream_manager.stop()
-    logger.info("✓ 视频流管理器已停止")
-
-    # 停止所有客流采集
-    try:
-        from dahua_collector import dahua_collector
-        dahua_collector.stop_all()
-        logger.info("✓ 客流采集器已停止")
-    except Exception:
-        pass
 
 
 # ==================== 直接运行 ====================

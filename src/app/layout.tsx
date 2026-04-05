@@ -14,15 +14,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FluxaVision - 客流统计系统",
-  description: "FluxaVision智能客流统计与分析管理系统，实时客流数据展示与设备管理。",
-  keywords: ["FluxaVision", "客流统计", "客流分析", "AI", "视频监控"],
-  authors: [{ name: "FluxaVision Team" }],
+  title: "FluxAvision - 客流统计系统",
+  description: "FluxAvision智能客流统计与分析管理系统，实时客流数据展示与设备管理。",
+  keywords: ["FluxAvision", "客流统计", "客流分析", "AI", "视频监控"],
+  authors: [{ name: "FluxAvision Team" }],
   icons: {
     icon: "/logo.png",
   },
   openGraph: {
-    title: "FluxaVision - 客流统计系统",
+    title: "FluxAvision - 客流统计系统",
     description: "智能客流统计与分析管理系统",
     type: "website",
   },
