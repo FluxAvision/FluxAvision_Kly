@@ -158,21 +158,23 @@ export default function LargeScreenView({ onClose }: LargeScreenProps) {
       if (dashRes.ok) {
         const json = await dashRes.json()
         const dashData = json.data || json
+        // 新版API: storeTotal 嵌套结构
+        const st = dashData.storeTotal || {}
         setMetrics({
-          todayIn: dashData.todayIn || 0,
-          todayOut: dashData.todayOut || 0,
-          currentIn: dashData.currentIn || 0,
-          weekIn: dashData.weekIn || 0,
-          weekOut: dashData.weekOut || 0,
-          monthIn: dashData.monthIn || 0,
-          monthOut: dashData.monthOut || 0,
-          totalIn: dashData.totalIn || 0,
-          totalOut: dashData.totalOut || 0,
+          todayIn: st.todayIn || dashData.todayIn || 0,
+          todayOut: st.todayOut || dashData.todayOut || 0,
+          currentIn: st.currentIn || dashData.currentIn || 0,
+          weekIn: st.weekIn || dashData.weekIn || 0,
+          weekOut: st.weekOut || dashData.weekOut || 0,
+          monthIn: st.monthIn || dashData.monthIn || 0,
+          monthOut: st.monthOut || dashData.monthOut || 0,
+          totalIn: st.totalIn || dashData.totalIn || 0,
+          totalOut: st.totalOut || dashData.totalOut || 0,
         })
         setHourlyData(
           (dashData.hourlyToday || []).map((h: any) => ({
             ...h,
-            hour: `${h.hour}:00`,
+            hour: `${String(h.hour).padStart(2, '0')}:00`,
           }))
         )
       }

@@ -1,0 +1,12 @@
+.idea/
+.next/
+node_modules/
+backend/venv/
+backend/__pycache__/
+backend/routers/__pycache__/
+data/.key
+data/.salt
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.pyc

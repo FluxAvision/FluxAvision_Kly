@@ -1,13 +1,40 @@
 """
 FluxaVision 客流统计系统 - SQLAlchemy ORM 模型
 
-与原 Prisma Schema 完全对应，使用 SQLCipher 加密数据库。
+使用 Python 内置 sqlite3 + AES-256 字段加密（通过 EncryptedString 类型）。
+敏感字段（password、activationCode、loginPassword）自动透明加解密。
 """
 from datetime import datetime, date
 from sqlalchemy import (
     Column, String, Integer, Boolean, DateTime, Text, Index,
+    TypeDecorator,
 )
 from database import Base
+from field_crypto import encrypt_field, decrypt_field
+
+
+# ==================== AES-256 字段加密类型 ====================
+class EncryptedString(TypeDecorator):
+    """
+    SQLAlchemy 自定义类型：透明 AES-256-CBC 字段加密。
+    注意：Column 定义时不要传参数，直接写 Column(EncryptedString)
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, str) and value:
+            return encrypt_field(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, str) and value.startswith("ENC:"):
+            return decrypt_field(value)
+        return value
 
 
 def _utcnow():
@@ -26,7 +53,7 @@ class Device(Base):
     model        = Column(String(50), default="大华", comment="型号")
     rtspPort     = Column(Integer, default=554, comment="RTSP端口")
     username     = Column(String(50), default="admin", comment="用户名")
-    password     = Column(String(200), default="", comment="密码")
+    password     = Column(EncryptedString, default="", comment="密码(加密)")
     rtspUrl      = Column(String(500), nullable=False, comment="RTSP地址")
     sdkPort      = Column(Integer, default=37777, comment="SDK端口 (大华默认37777)")
     channel      = Column(Integer, default=0, comment="客流统计通道号")
@@ -62,7 +89,7 @@ class SystemSettings(Base):
     id              = Column(String(20), primary_key=True, default="default")
     storeName       = Column(String(100), default="我的门店", comment="门店名称")
     storeLogo       = Column(String(500), default="", comment="门店Logo路径")
-    loginPassword   = Column(String(200), default="", comment="登录密码")
+    loginPassword   = Column(EncryptedString, default="", comment="登录密码(加密)")
     dashboardMetrics = Column(String(200), default="todayIn,todayOut,currentIn,weekIn", comment="仪表盘显示指标")
     createdAt       = Column(DateTime, default=_utcnow)
     updatedAt       = Column(DateTime, default=_utcnow, onupdate=_utcnow)
@@ -102,7 +129,7 @@ class License(Base):
 
     id                  = Column(String(20), primary_key=True, default="default")
     hardwareFingerprint = Column(String(64), default="", comment="硬件指纹 (32位)")
-    activationCode      = Column(Text, default="", comment="Ed25519签名授权码")
+    activationCode      = Column(EncryptedString, default="", comment="Ed25519签名授权码(加密)")
     licenseFile         = Column(Text, default="", comment="授权文件内容")
     maxChannels         = Column(Integer, default=4, comment="最大路数(通道数)")
     maxDevices          = Column(Integer, default=4, comment="最大设备数(兼容旧字段)")

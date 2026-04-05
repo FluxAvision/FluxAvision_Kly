@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-FluxaVision 客流统计系统 - PyInstaller 打包配置
+FluxAvision 客流统计系统 - PyInstaller 打包配置
 
 使用方法:
   cd backend
   pyinstaller FluxaVision.spec
 
 输出:
-  dist/FluxaVision/  — 包含 exe 和所有依赖的目录
+  dist/FluxAvision/  — 包含 exe 和所有依赖的目录
 """
 import os
 import sys
@@ -52,9 +52,8 @@ a = Analysis(
         'sqlalchemy.sql.default_comparator',
         'sqlalchemy.dialects.sqlite',
 
-        # sqlcipher3
-        'sqlcipher3',
-        'sqlcipher3.dbapi2',
+        # field_crypto (AES-256 字段加密)
+        'field_crypto',
 
         # cryptography
         'cryptography',
@@ -97,7 +96,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='FluxaVision',
+    name='FluxAvision',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -121,5 +120,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='FluxaVision',
+    name='FluxAvision',
 )

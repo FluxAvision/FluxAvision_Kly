@@ -56,6 +56,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from '@/hooks/use-toast'
 
 interface Device {
   id: string
@@ -182,7 +183,14 @@ export default function DeviceManagement() {
   }
 
   const handleSave = async () => {
-    if (!formData.name || !formData.ip) return
+    if (!formData.name || !formData.ip) {
+      toast({
+        variant: 'destructive',
+        title: '提交失败',
+        description: '请先填写设备名称和 IP 地址。',
+      })
+      return
+    }
     setSaving(true)
     setSaveMessage('')
     try {
@@ -195,6 +203,17 @@ export default function DeviceManagement() {
         if (res.ok) {
           setEditDialogOpen(false)
           fetchDevices()
+          toast({
+            title: '保存成功',
+            description: `设备“${formData.name}”已更新。`,
+          })
+        } else {
+          const json = await res.json().catch(() => null)
+          toast({
+            variant: 'destructive',
+            title: '保存失败',
+            description: json?.message || '设备更新失败，请稍后重试。',
+          })
         }
       } else {
         const res = await fetch('/api/devices', {
@@ -206,13 +225,30 @@ export default function DeviceManagement() {
           const json = await res.json()
           const msg = json.data?.collectorMessage || ''
           setSaveMessage(msg)
+          toast({
+            title: '添加成功',
+            description: msg || `设备“${formData.name}”已添加。`,
+          })
           setTimeout(() => {
             setAddDialogOpen(false)
             setSaveMessage('')
             fetchDevices()
           }, 2000)
+        } else {
+          const json = await res.json().catch(() => null)
+          toast({
+            variant: 'destructive',
+            title: '添加失败',
+            description: json?.message || '设备添加失败，请检查参数后重试。',
+          })
         }
       }
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: editingId ? '保存失败' : '添加失败',
+        description: '请求提交失败，请检查网络或后端服务。',
+      })
     } finally {
       setSaving(false)
     }
@@ -226,9 +262,24 @@ export default function DeviceManagement() {
         setDeleteConfirmOpen(false)
         setDeletingId(null)
         fetchDevices()
+        toast({
+          title: '删除成功',
+          description: '设备已删除。',
+        })
+      } else {
+        const json = await res.json().catch(() => null)
+        toast({
+          variant: 'destructive',
+          title: '删除失败',
+          description: json?.message || '设备删除失败，请稍后重试。',
+        })
       }
     } catch {
-      // Ignore
+      toast({
+        variant: 'destructive',
+        title: '删除失败',
+        description: '删除请求未完成，请检查网络或后端服务。',
+      })
     }
   }
 
@@ -868,25 +919,36 @@ export default function DeviceManagement() {
         setPreviewDialogOpen(open)
         if (!open) setPreviewDevice(null)
       }}>
-        <DialogContent className="bg-[#112240] border-[#1e293b] max-w-4xl w-full p-0 overflow-hidden">
-          <DialogHeader className="px-5 pt-5 pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle className="text-white">
+        <DialogContent className="flex h-[86vh] max-h-[900px] w-[min(96vw,1200px)] max-w-none flex-col overflow-hidden border-[#1e293b] bg-[#112240] p-0">
+          <DialogHeader className="shrink-0 border-b border-[#1e293b] bg-[#142544] px-6 py-5 pr-14 text-left">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <DialogTitle className="text-2xl font-semibold tracking-tight text-white">
                   视频预览 - {previewDevice?.name || ''}
                 </DialogTitle>
-                <p className="text-xs text-[#8892a0] mt-1">
+                <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#9fb3c8]">
                   {previewDevice?.ip} · {previewDevice?.location}
-                </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#9fb3c8]">
+                  <span className="font-medium text-white">{previewDevice?.name || ''}</span>
+                  <span>{previewDevice?.ip}</span>
+                  <span>{previewDevice?.location}</span>
+                </div>
               </div>
               {previewDevice?.rtspUrl && (
-                <p className="text-[10px] text-[#8892a0]/60 font-mono max-w-xs truncate">
-                  {previewDevice.rtspUrl}
-                </p>
+                <div className="rounded-lg border border-[#233554] bg-[#0f1b33]/90 px-3 py-2">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[#00d9ff]/70">
+                    RTSP 地址
+                  </p>
+                  <p className="truncate font-mono text-xs text-[#7f8ea3]">
+                    {previewDevice.rtspUrl}
+                  </p>
+                </div>
               )}
             </div>
           </DialogHeader>
-          <div className="relative bg-black" style={{ height: '70vh' }}>
+          <div className="min-h-0 flex-1 bg-[#09111f] p-4 sm:p-5">
+            <div className="h-full overflow-hidden rounded-xl border border-[#1e293b] bg-black shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
             {previewDevice && (
               <RTSPVideoPlayer
                 deviceId={previewDevice.id}
@@ -898,6 +960,7 @@ export default function DeviceManagement() {
                 className="w-full h-full"
               />
             )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
