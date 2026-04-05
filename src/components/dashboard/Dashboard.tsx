@@ -243,12 +243,12 @@ export default function Dashboard({ dashboardMetrics }: DashboardProps) {
                 }}
                 formatter={(value: number, name: string) => [
                   value.toLocaleString(),
-                  name === 'countIn' ? '门店进入' : '门店出去',
+                  name === 'countIn' ? '进人数' : '出人数',
                 ]}
               />
               <Legend
                 formatter={(value: string) =>
-                  value === 'countIn' ? '门店进入' : '门店出去'
+                  value === 'countIn' ? '进人数' : '出人数'
                 }
                 wrapperStyle={{ color: '#8892a0' }}
               />
@@ -372,7 +372,7 @@ export default function Dashboard({ dashboardMetrics }: DashboardProps) {
                       }}
                       formatter={(value: number, name: string) => [
                         value.toLocaleString(),
-                        name === 'countIn' ? '进入' : '出去',
+                        name === 'countIn' ? '进人数' : '出人数',
                       ]}
                     />
                     <Bar dataKey="countIn" radius={[4, 4, 0, 0]} name="countIn">

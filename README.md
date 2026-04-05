@@ -1,4 +1,4 @@
-# FluxaVision 客流统计系统
+# FluxAvision 客流统计系统
 
 基于 **Python FastAPI + Next.js + SQLite3** 的门店客流统计与分析系统，专为大华摄像机 SDK 客流采集场景设计。
 
@@ -49,7 +49,7 @@
 ## 目录结构
 
 ```
-FluxaVision/
+FluxAvision/
 │
 ├── backend/                         # Python 后端
 │   ├── main.py                      # FastAPI 应用入口 + 启动/关闭事件
@@ -83,7 +83,7 @@ FluxaVision/
 │   ├── launcher.py                  # PyInstaller 入口（命令行参数解析）
 │   │
 │   ├── requirements.txt             # Python 依赖
-│   ├── FluxaVision.spec             # PyInstaller 打包配置
+│   ├── FluxAvision.spec             # PyInstaller 打包配置
 │   ├── build.bat                    # 一键构建脚本（前端+后端+打包）
 │   ├── installer.iss                # Inno Setup 安装程序脚本
 │   ├── create_icon.py               # 应用图标生成脚本
@@ -208,7 +208,7 @@ FluxaVision/
 
 ```bash
 git clone <repo-url>
-cd FluxaVision
+cd FluxAvision
 ```
 
 ### 2. 安装 Python 依赖
@@ -280,7 +280,7 @@ build.bat
 | 5/6 | 生成应用图标 |
 | 6/6 | PyInstaller 打包为 exe |
 
-构建产物在 `backend/dist/FluxaVision/FluxaVision.exe`。
+构建产物在 `backend/dist/FluxAvision/FluxAvision.exe`。
 
 ### 方式二：手动分步构建
 
@@ -299,7 +299,7 @@ xcopy out backend\frontend-build\ /E /I /Q
 
 # 4. PyInstaller 打包
 cd backend
-python -m PyInstaller --clean --noconfirm FluxaVision.spec
+python -m PyInstaller --clean --noconfirm FluxAvision.spec
 ```
 
 ### 生成安装程序（可选）
@@ -311,7 +311,7 @@ cd backend
 iscc installer.iss
 ```
 
-安装程序输出到 `installer_output/FluxaVision-Setup-v2.1.0.exe`。
+安装程序输出到 `installer_output/FluxAvision-Setup-v2.1.0.exe`。
 
 ---
 
@@ -319,19 +319,19 @@ iscc installer.iss
 
 ```bash
 # 直接运行（后台静默模式，自动打开浏览器）
-FluxaVision.exe
+FluxAvision.exe
 
 # 控制台模式（调试用，可以看到日志输出）
-FluxaVision.exe --console
+FluxAvision.exe --console
 
 # 指定端口
-FluxaVision.exe --port 9000
+FluxAvision.exe --port 9000
 
 # 安装开机自启动
-FluxaVision.exe --install
+FluxAvision.exe --install
 
 # 卸载开机自启动
-FluxaVision.exe --uninstall
+FluxAvision.exe --uninstall
 ```
 
 ---
@@ -360,12 +360,12 @@ python generate_activation.py \
 
 ```
 data/
-├── fluxavision.db          # SQLite3 数据库文件
-├── fluxavision.db-wal      # WAL 日志
-├── fluxavision.db-shm      # 共享内存
+├── FluxAvision.db          # SQLite3 数据库文件
+├── FluxAvision.db-wal      # WAL 日志
+├── FluxAvision.db-shm      # 共享内存
 ├── .key                    # AES 加密密钥文件（硬件指纹加密）
 ├── .salt                   # 随机盐值
-└── fluxavision.log         # 运行日志
+└── FluxAvision.log         # 运行日志
 ```
 
 > 数据库中敏感字段（设备密码、登录密码、激活码）存储为 `ENC:` 前缀的 AES-256 密文。
@@ -408,6 +408,6 @@ data/
 | 端口 8080 被占用 | 修改 `backend/config.py` 中 `API_PORT` 或用 `--port` 参数 |
 | 前端代理 502 | 确认后端已启动在 8080 端口 |
 | 大华 SDK 不可用 | 仅支持 Windows x64，确认已安装 `.whl` 包 |
-| 数据库解密失败 | 删除 `data/.key` 和 `data/fluxavision.db*` 重新初始化 |
+| 数据库解密失败 | 删除 `data/.key` 和 `data/FluxAvision.db*` 重新初始化 |
 | PyInstaller 打包失败 | 确认 `frontend-build/` 目录存在且有 `index.html` |
-| 打包后前端空白 | 检查 `FluxaVision.spec` 中 `datas` 路径是否正确 |
+| 打包后前端空白 | 检查 `FluxAvision.spec` 中 `datas` 路径是否正确 |
