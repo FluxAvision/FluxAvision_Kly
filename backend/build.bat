@@ -44,6 +44,12 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
+pip install NetSDK-2.0.0.1-py3-none-win_amd64.whl >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ✗ NetSDK whl 安装失败
+    pause
+    exit /b 1
+)
 pip install pyinstaller pystray Pillow >nul 2>&1
 if %errorlevel% neq 0 (
     echo ✗ 打包工具安装失败
@@ -136,21 +142,6 @@ if %errorlevel% neq 0 (
 )
 echo ✓ PyInstaller 打包完成
 
-:: ==================== Inno Setup 安装程序 ====================
-echo.
-echo [可选] 构建 Inno Setup 安装程序...
-where iscc >nul 2>&1
-if %errorlevel% equ 0 (
-    iscc installer.iss
-    if %errorlevel% equ 0 (
-        echo ✓ 安装程序构建完成
-    )
-) else (
-    echo ⚠ 未找到 Inno Setup Compiler，跳过安装程序构建
-    echo   下载地址: https://jrsoftware.org/isinfo.php
-    echo   也可以直接使用 dist\FluxaVision\ 目录分发给用户
-)
-
 :: ==================== 构建摘要 ====================
 echo.
 echo ══════════════════════════════════════════════════
@@ -165,10 +156,9 @@ if exist "dist\FluxaVision\FluxaVision.exe" (
 )
 echo.
 echo 运行方式:
-echo   直接运行: FluxaVision.exe
+echo   直接运行: FluxaVision.exe  （静默后台，自动注册开机自启）
 echo   控制台调试: FluxaVision.exe --console
 echo   指定端口: FluxaVision.exe --port 9000
-echo   安装自启: FluxaVision.exe --install
 echo   卸载自启: FluxaVision.exe --uninstall
 echo.
 

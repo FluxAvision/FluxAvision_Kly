@@ -33,6 +33,8 @@ a = Analysis(
         (FRONTEND_BUILD, 'static'),
         # 应用图标（托盘图标运行时加载）
         (os.path.join(BACKEND_DIR, 'assets', 'icon.ico'), 'assets'),
+        # 大华 NetSDK 包（含 .pyd C扩展 + py文件，运行时 importlib 动态加载）
+        *collect_data_files('NetSDK', includes=['**/*']),
     ],
 
     hiddenimports=[
@@ -201,6 +203,13 @@ a = Analysis(
         'routers.device_id',
         'routers.device_status',
         'routers.stream',
+
+        # ── 大华 NetSDK ───────────────────────────────────────────────────────
+        'NetSDK',
+        'NetSDK.NetSDK',
+        'NetSDK.SDK_Callback',
+        'NetSDK.SDK_Struct',
+        'NetSDK.netsdk',
 
         # ── comtypes（桌面快捷方式创建）────────────────────────────────────────
         'comtypes',
