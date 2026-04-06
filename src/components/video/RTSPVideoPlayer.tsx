@@ -122,25 +122,22 @@ export default function RTSPVideoPlayer({
     const nextUrl = URL.createObjectURL(frame)
     const img = imgRef.current
 
-    img.onload = () => {
-      if (token !== frameTokenRef.current) {
-        URL.revokeObjectURL(nextUrl)
-        return
-      }
+    // 先切换状态到 playing，确保 img 的 display 从 none 变为 block，
+    // 再设置 src，避免 onload 未触发导致画面永远不显示
+    revokeObjectUrl()
+    objectUrlRef.current = nextUrl
+    updateStatus('playing')
+    retryCountRef.current = 0
+    img.src = nextUrl
 
-      revokeObjectUrl()
-      objectUrlRef.current = nextUrl
-      updateStatus('playing')
-      retryCountRef.current = 0
-      img.onload = null
-    }
-
+    // 若帧解码失败则清理
     img.onerror = () => {
-      URL.revokeObjectURL(nextUrl)
+      if (token === frameTokenRef.current) {
+        URL.revokeObjectURL(nextUrl)
+        objectUrlRef.current = null
+      }
       img.onerror = null
     }
-
-    img.src = nextUrl
   }, [revokeObjectUrl, updateStatus])
 
   const startPolling = useCallback(() => {
@@ -202,7 +199,7 @@ export default function RTSPVideoPlayer({
     }
 
     ws.onerror = () => {
-      logger.info('WebSocket 预览失败，降级到快照轮询')
+      console.log('[RTSPVideoPlayer] WebSocket 预览失败，降级到快照轮询')
       startPolling()
     }
 

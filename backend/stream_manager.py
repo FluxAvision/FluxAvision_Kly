@@ -10,6 +10,7 @@ FluxaVision 视频流管理器。
 
 import logging
 import os
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -142,17 +143,28 @@ class StreamManager:
 
     def _capture_loop(self, device_id: str):
         """持续采集最新帧并预编码为 JPEG。"""
-        import cv2
+        logger.info(f"[DEBUG] _capture_loop 已进入: 设备={device_id}")
+        try:
+            import cv2
+            logger.info(f"[DEBUG] cv2 import 成功, 版本={cv2.__version__}, 文件={cv2.__file__}")
+        except Exception as e:
+            logger.error(f"[DEBUG] cv2 import 失败: {e}")
+            return
 
         session = self._sessions.get(device_id)
         if not session:
+            logger.error(f"[DEBUG] session 不存在: 设备={device_id}")
             return
+
+        logger.info(f"[DEBUG] RTSP URL={session.rtsp_url}")
 
         # 尽量降低 FFmpeg 内部缓冲，优先拿到最新画面。
         os.environ.setdefault(
             "OPENCV_FFMPEG_CAPTURE_OPTIONS",
             "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay",
         )
+        logger.info(f"[DEBUG] OPENCV_FFMPEG_CAPTURE_OPTIONS={os.environ.get('OPENCV_FFMPEG_CAPTURE_OPTIONS')}")
+
         encode_params = [
             int(cv2.IMWRITE_JPEG_QUALITY), int(JPEG_QUALITY),
             int(cv2.IMWRITE_JPEG_OPTIMIZE), 1,
@@ -166,7 +178,16 @@ class StreamManager:
                     pass
                 session.cap = None
 
-            cap = cv2.VideoCapture(session.rtsp_url, cv2.CAP_FFMPEG)
+            logger.info(f"[DEBUG] 正在调用 cv2.VideoCapture: url={session.rtsp_url[:80]}")
+            try:
+                cap = cv2.VideoCapture(session.rtsp_url, cv2.CAP_FFMPEG)
+                logger.info(f"[DEBUG] VideoCapture 返回: cap={cap}, isOpened={cap.isOpened() if cap else 'N/A'}")
+            except Exception as e:
+                logger.error(f"[DEBUG] VideoCapture 抛出异常: {e}")
+                session.reconnect_count += 1
+                self._sleep_with_cancel(session, RECONNECT_INTERVAL)
+                continue
+
             if not cap or not cap.isOpened():
                 logger.error(f"无法打开 RTSP 流: {session.rtsp_url[:80]}")
                 session.reconnect_count += 1
@@ -178,8 +199,12 @@ class StreamManager:
                 continue
 
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
-            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 10000)
+            # OPEN_TIMEOUT / READ_TIMEOUT 在部分 OpenCV 版本不支持，用 try 保护
+            try:
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 10000)
+            except Exception:
+                pass
             session.cap = cap
             session.reconnect_count = 0
             logger.info(f"RTSP 连接成功: 设备={device_id}")

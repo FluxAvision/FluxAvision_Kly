@@ -22,6 +22,27 @@ if getattr(sys, 'frozen', False):
 else:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# ── 注册 OpenCV/FFmpeg DLL 搜索目录 ────────────────────────────────────────
+# 必须在任何 import cv2 之前执行，否则 OpenCV 加载 FFmpeg DLL 时找不到文件，
+# 导致 VideoCapture(RTSP) 永久卡死。
+# 打包后 DLL 在 _internal/cv2/ 下（PyInstaller datas 目标路径）。
+_dll_reg_log = []
+if getattr(sys, 'frozen', False):
+    _meipass = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    _dll_reg_log.append(f'_MEIPASS={_meipass}')
+    import glob as _glob
+    _ffmpeg_dlls = _glob.glob(os.path.join(_meipass, 'cv2', 'opencv_videoio_ffmpeg*.dll'))
+    _dll_reg_log.append(f'FFmpeg DLL found={_ffmpeg_dlls}')
+    for _dll_search_dir in (_meipass, os.path.join(_meipass, 'cv2')):
+        if os.path.isdir(_dll_search_dir):
+            os.environ['PATH'] = _dll_search_dir + os.pathsep + os.environ.get('PATH', '')
+            if hasattr(os, 'add_dll_directory'):
+                try:
+                    os.add_dll_directory(_dll_search_dir)
+                    _dll_reg_log.append(f'add_dll_directory OK: {_dll_search_dir}')
+                except Exception as _e:
+                    _dll_reg_log.append(f'add_dll_directory FAIL: {_dll_search_dir}: {_e}')
+
 import logging
 import argparse
 import threading
@@ -97,6 +118,8 @@ def main():
 
     logger = logging.getLogger("FluxaVision")
     logger.info("FluxaVision 客流统计系统启动中...")
+    for _msg in _dll_reg_log:
+        logger.info(f'[DLL] {_msg}')
 
     # Windows 非控制台模式：启动托盘图标（后台线程）
     if sys.platform == "win32" and not args.console:
