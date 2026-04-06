@@ -31,6 +31,22 @@ try:
     import traceback
     import types
 
+    # PyInstaller 打包后，将 _MEIPASS/NetSDK 加入 sys.path，
+    # 同时确保 SDK_Struct.py 能用 __file__ 找到同级的 Libs/win64/ DLL。
+    if getattr(sys, 'frozen', False):
+        _meipass = getattr(sys, '_MEIPASS', None)
+        if _meipass:
+            _netsdk_pkg = os.path.join(_meipass, 'NetSDK')
+            if os.path.isdir(_netsdk_pkg) and _netsdk_pkg not in sys.path:
+                sys.path.insert(0, os.path.dirname(_netsdk_pkg))  # 让 import NetSDK 可以找到
+            # DLL 目录加入 PATH，防止 LoadLibrary 找不到依赖 dll
+            _dll_dir = os.path.join(_netsdk_pkg, 'Libs', 'win64')
+            if os.path.isdir(_dll_dir):
+                os.environ['PATH'] = _dll_dir + os.pathsep + os.environ.get('PATH', '')
+                # Python 3.8+ 需要显式 add_dll_directory
+                if hasattr(os, 'add_dll_directory'):
+                    os.add_dll_directory(_dll_dir)
+
     def _load_netsdk():
         """手动加载大华 NetSDK，绕过 wheel 包的自引用导入问题。"""
         pkg_dir = None
