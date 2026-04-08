@@ -206,6 +206,19 @@
   border: 1px solid #1e293b !important;
 }
 
+.ant-select-item {
+  color: #ffffff !important;
+}
+
+.ant-select-item-option-active {
+  background: #172a45 !important;
+}
+
+.ant-select-item-option-selected {
+  background: #0a192f !important;
+  color: #00d9ff !important;
+}
+
 .ant-table {
   background: transparent !important;
 }

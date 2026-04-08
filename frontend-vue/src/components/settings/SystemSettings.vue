@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ImageIcon, Loader2, Save, Upload } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { message } from 'ant-design-vue'
 
 const metricOptions = [
   { key: 'todayIn', label: '今日进' },
@@ -24,6 +24,14 @@ const settings = ref({
   dashboardMetrics: ['todayIn', 'todayOut', 'currentIn', 'weekIn'],
 })
 
+const metricLabels = ref<Record<string, string>>({})
+
+function getMetricLabel(key: string): string {
+  if (metricLabels.value[key]) return metricLabels.value[key]
+  const opt = metricOptions.find(o => o.key === key)
+  return opt ? opt.label : key
+}
+
 const loading = ref(true)
 const saving = ref(false)
 const newPassword = ref('')
@@ -41,9 +49,16 @@ async function fetchSettings() {
       if (data.dashboardMetrics) {
         settings.value.dashboardMetrics = data.dashboardMetrics.split(',').filter(Boolean)
       }
+      if (data.dashboardMetricsLabels) {
+        try {
+          metricLabels.value = JSON.parse(data.dashboardMetricsLabels)
+        } catch {
+          metricLabels.value = {}
+        }
+      }
     }
   } catch {
-    toast.error('加载设置失败')
+    message.error('加载设置失败')
   } finally {
     loading.value = false
   }
@@ -69,7 +84,7 @@ function handleMetricToggle(key: string) {
   } else if (metrics.length < MAX_METRICS) {
     metrics.push(key)
   } else {
-    toast.error(`最多选择 ${MAX_METRICS} 个指标`)
+    message.error(`最多选择 ${MAX_METRICS} 个指标`)
   }
 }
 
@@ -80,6 +95,7 @@ async function handleSave() {
       storeName: settings.value.storeName,
       storeLogo: settings.value.storeLogo,
       dashboardMetrics: settings.value.dashboardMetrics.join(','),
+      dashboardMetricsLabels: JSON.stringify(metricLabels.value),
     }
     if (newPassword.value) {
       body.loginPassword = newPassword.value
@@ -95,13 +111,17 @@ async function handleSave() {
       if (newPassword.value) {
         settings.value.loginPassword = newPassword.value
         newPassword.value = ''
+        localStorage.removeItem('fluxavision_auth_token')
+        window.location.reload()
+        return
       }
-      toast.success('设置已保存')
+      message.success('设置已保存')
     } else {
-      toast.error('保存失败')
+      const errData = await res.json().catch(() => ({}))
+      message.error(`保存失败: ${errData.message || res.statusText}`)
     }
-  } catch {
-    toast.error('保存失败')
+  } catch (e: any) {
+    message.error(`保存失败: ${e.message || '网络错误'}`)
   } finally {
     saving.value = false
   }
@@ -115,20 +135,8 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-bold text-white">系统设置</h2>
-        <p class="text-[#8892a0] mt-1">管理系统基本配置和仪表盘显示</p>
-      </div>
-      <button
-        :disabled="saving"
-        class="flex items-center gap-2 px-4 py-2 bg-[#00d9ff] text-[#0a192f] rounded-md text-sm font-medium hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-        @click="handleSave"
-      >
-        <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
-        <Save v-else class="w-4 h-4" />
-        保存设置
-      </button>
+    <div>
+      <h2 class="text-2xl font-bold text-white">系统设置 <span class="text-sm font-normal text-[#8892a0] ml-2">管理系统基本配置和仪表盘显示</span></h2>
     </div>
 
     <!-- Loading skeleton -->
@@ -155,46 +163,44 @@ onMounted(() => {
       <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
         <h3 class="text-lg font-medium text-white">门店信息</h3>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <label class="text-sm text-[#8892a0]">门店名称</label>
-            <input
-              v-model="settings.storeName"
-              type="text"
-              class="w-full bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
-              placeholder="请输入门店名称"
-            />
-          </div>
+        <div class="flex items-center gap-4">
+          <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">门店名称</label>
+          <input
+            v-model="settings.storeName"
+            type="text"
+            class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+            placeholder="请输入门店名称"
+          />
+        </div>
 
-          <div class="space-y-2">
-            <label class="text-sm text-[#8892a0]">门店Logo</label>
-            <div class="flex items-center gap-3">
-              <div
-                class="w-10 h-10 rounded-lg bg-[#0a192f] border border-[#1e293b] flex items-center justify-center overflow-hidden"
-              >
-                <img
-                  v-if="settings.storeLogo"
-                  :src="settings.storeLogo"
-                  alt="Logo"
-                  class="w-full h-full object-cover"
-                />
-                <ImageIcon v-else class="w-5 h-5 text-[#8892a0]" />
-              </div>
-              <button
-                class="flex items-center gap-2 px-3 py-2 bg-[#0a192f] border border-[#1e293b] rounded-md text-sm text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer"
-                @click="fileInputRef?.click()"
-              >
-                <Upload class="w-4 h-4" />
-                上传Logo
-              </button>
-              <input
-                ref="fileInputRef"
-                type="file"
-                accept="image/*"
-                class="hidden"
-                @change="handleFileUpload"
+        <div class="flex items-center gap-4">
+          <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">门店Logo</label>
+          <div class="flex items-center gap-3 flex-1">
+            <div
+              class="w-10 h-10 rounded-lg bg-[#0a192f] border border-[#1e293b] flex items-center justify-center overflow-hidden"
+            >
+              <img
+                v-if="settings.storeLogo"
+                :src="settings.storeLogo"
+                alt="Logo"
+                class="w-full h-full object-cover"
               />
+              <ImageIcon v-else class="w-5 h-5 text-[#8892a0]" />
             </div>
+            <button
+              class="flex items-center gap-2 px-3 py-2 bg-[#0a192f] border border-[#1e293b] rounded-md text-sm text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer"
+              @click="fileInputRef?.click()"
+            >
+              <Upload class="w-4 h-4" />
+              上传Logo
+            </button>
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="handleFileUpload"
+            />
           </div>
         </div>
       </div>
@@ -202,27 +208,28 @@ onMounted(() => {
       <!-- Password -->
       <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
         <h3 class="text-lg font-medium text-white">登录密码</h3>
-        <div class="space-y-2">
-          <label class="text-sm text-[#8892a0]">新密码</label>
-          <input
-            v-model="newPassword"
-            type="password"
-            class="w-full bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
-            placeholder="留空则不修改密码"
-          />
+        <div class="flex items-start gap-4">
+          <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right mt-2">新密码</label>
+          <div class="flex-1">
+            <input
+              v-model="newPassword"
+              type="password"
+              class="w-full bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+              placeholder="留空则不修改密码"
+            />
+            <p class="text-xs text-[#8892a0]/60 mt-1">修改后下次登录需要使用新密码</p>
+          </div>
         </div>
-        <p class="text-xs text-[#8892a0]/60">修改后下次登录需要使用新密码</p>
       </div>
 
       <!-- Dashboard Metrics -->
       <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-medium text-white">仪表盘指标</h3>
-          <span class="text-xs text-[#8892a0]">
-            已选 {{ settings.dashboardMetrics.length }}/{{ MAX_METRICS }}
-          </span>
+          <div class="flex items-center gap-3">
+            <h3 class="text-lg font-medium text-white">数据指标</h3>
+            <span class="text-sm text-[#8892a0]">选择要在仪表盘上显示的客流指标（最多 {{ MAX_METRICS }} 个），已选 {{ settings.dashboardMetrics.length }}/{{ MAX_METRICS }}</span>
+          </div>
         </div>
-        <p class="text-sm text-[#8892a0]">选择要在仪表盘上显示的客流指标（最多 {{ MAX_METRICS }} 个）</p>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div
@@ -248,6 +255,39 @@ onMounted(() => {
             </span>
           </div>
         </div>
+
+      </div>
+
+      <!-- 自定义指标名称 -->
+      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
+        <h3 class="text-lg font-medium text-white">自定义指标名称</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div
+            v-for="opt in metricOptions"
+            :key="opt.key"
+            class="flex items-center gap-3"
+          >
+            <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">{{ opt.label }}</label>
+            <input
+              :value="metricLabels[opt.key] || ''"
+              type="text"
+              class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-1.5 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+              :placeholder="opt.label"
+              @input="metricLabels[opt.key] = ($event.target as HTMLInputElement).value"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-center pt-4">
+        <button
+          :disabled="saving"
+          class="flex items-center gap-2 px-4 py-2 bg-[#00d9ff] text-[#0a192f] rounded-md text-sm font-medium hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          @click="handleSave"
+        >
+          <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
+          <Save v-else class="w-4 h-4" />
+          保存设置
+        </button>
       </div>
     </div>
   </div>

@@ -14,7 +14,7 @@ import {
   RefreshCw,
   XCircle,
 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { message } from 'ant-design-vue'
 import { generateRtspUrl } from '@/lib/utils'
 import RTSPVideoPlayer from '@/components/video/RTSPVideoPlayer.vue'
 
@@ -54,7 +54,7 @@ const emptyDevice = {
   sdkPort: 37777,
   channel: 0,
   username: 'admin',
-  password: '',
+  password: 'admin123',
   rtspUrl: '',
   status: 'offline',
 }
@@ -79,13 +79,15 @@ const saveMessage = ref('')
 const searchIpRange = ref('')
 const searchingDevices = ref(false)
 const searchResults = ref<SearchDevice[]>([])
+const formErrors = ref<Record<string, string>>({})
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // Table columns
 const columns = [
   { title: '设备名称', dataIndex: 'name', key: 'name' },
-  { title: 'IP地址', dataIndex: 'ip', key: 'ip' },
+  { title: '设备序列号', dataIndex: 'serialNumber', key: 'serialNumber' },
+  { title: 'IP', dataIndex: 'ip', key: 'ip' },
   { title: '安装位置', dataIndex: 'location', key: 'location' },
   { title: '型号', dataIndex: 'model', key: 'model' },
   { title: '状态', key: 'status' },
@@ -149,14 +151,27 @@ function updateForm(field: string, value: string | number) {
 
 function resetForm() {
   formData.value = { ...emptyDevice }
+  formErrors.value = {}
+}
+
+function validateForm(): boolean {
+  const errors: Record<string, string> = {}
+  if (!formData.value.name.trim()) errors.name = '请输入设备名称'
+  if (!formData.value.serialNumber.trim()) errors.serialNumber = '请输入设备序列号'
+  if (!formData.value.ip.trim()) errors.ip = '请输入IP地址'
+  else if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(formData.value.ip.trim())) errors.ip = 'IP地址格式不正确'
+  if (!formData.value.model) errors.model = '请选择型号'
+  if (formData.value.model === '大华') {
+    if (!formData.value.sdkPort || formData.value.sdkPort <= 0) errors.sdkPort = '请输入SDK端口'
+    if (formData.value.channel < 0) errors.channel = '请输入有效的通道号'
+  }
+  formErrors.value = errors
+  return Object.keys(errors).length === 0
 }
 
 // Save (add or edit)
 async function handleSave() {
-  if (!formData.value.name || !formData.value.ip) {
-    toast.error('提交失败', { description: '请先填写设备名称和 IP 地址。' })
-    return
-  }
+  if (!validateForm()) return
   saving.value = true
   saveMessage.value = ''
   try {
@@ -169,10 +184,10 @@ async function handleSave() {
       if (res.ok) {
         dialogs.edit = false
         fetchDevices()
-        toast.success('保存成功', { description: `设备"${formData.value.name}"已更新。` })
+        message.success('保存成功', { description: `设备"${formData.value.name}"已更新。` })
       } else {
         const json = await res.json().catch(() => null)
-        toast.error('保存失败', { description: json?.message || '设备更新失败，请稍后重试。' })
+        message.error('保存失败', { description: json?.message || '设备更新失败，请稍后重试。' })
       }
     } else {
       const res = await fetch('/api/devices', {
@@ -184,7 +199,7 @@ async function handleSave() {
         const json = await res.json()
         const msg = json.data?.collectorMessage || ''
         saveMessage.value = msg
-        toast.success('添加成功', { description: msg || `设备"${formData.value.name}"已添加。` })
+        message.success('添加成功', { description: msg || `设备"${formData.value.name}"已添加。` })
         setTimeout(() => {
           dialogs.add = false
           saveMessage.value = ''
@@ -192,11 +207,11 @@ async function handleSave() {
         }, 2000)
       } else {
         const json = await res.json().catch(() => null)
-        toast.error('添加失败', { description: json?.message || '设备添加失败，请检查参数后重试。' })
+        message.error('添加失败', { description: json?.message || '设备添加失败，请检查参数后重试。' })
       }
     }
   } catch {
-    toast.error(editingId.value ? '保存失败' : '添加失败', {
+    message.error(editingId.value ? '保存失败' : '添加失败', {
       description: '请求提交失败，请检查网络或后端服务。',
     })
   } finally {
@@ -213,13 +228,13 @@ async function handleDelete() {
       dialogs.deleteConfirm = false
       deletingId.value = null
       fetchDevices()
-      toast.success('删除成功', { description: '设备已删除。' })
+      message.success('删除成功', { description: '设备已删除。' })
     } else {
       const json = await res.json().catch(() => null)
-      toast.error('删除失败', { description: json?.message || '设备删除失败，请稍后重试。' })
+      message.error('删除失败', { description: json?.message || '设备删除失败，请稍后重试。' })
     }
   } catch {
-    toast.error('删除失败', { description: '删除请求未完成，请检查网络或后端服务。' })
+    message.error('删除失败', { description: '删除请求未完成，请检查网络或后端服务。' })
   }
 }
 
@@ -299,6 +314,7 @@ function openEditDialog(device: Device) {
   formData.value = { ...device }
   editingId.value = device.id
   saveMessage.value = ''
+  formErrors.value = {}
   dialogs.edit = true
 }
 
@@ -342,7 +358,7 @@ function closeEditDialog() {
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8892a0]" />
         <input
           v-model="searchQuery"
-          placeholder="搜索设备名称、IP、位置..."
+          placeholder="搜索设备名称、IP..."
           class="w-full pl-9 pr-3 py-2 text-sm bg-[#0a192f] border border-[#1e293b] rounded-md text-white placeholder-[#8892a0]/50 outline-none focus:border-[#00d9ff] transition-colors"
         />
       </div>
@@ -350,15 +366,14 @@ function closeEditDialog() {
         @click="openSearchDialog"
         class="!border-[#1e293b] !text-[#8892a0] hover:!text-white hover:!bg-[#172a45]"
       >
-        <template #icon><Search class="w-4 h-4" /></template>
+        <Search class="w-4 h-4 inline-block align-text-bottom mr-1" />
         搜索设备
       </a-button>
       <a-button
-        type="primary"
         @click="openAddDialog"
         class="!bg-[#00d9ff] !border-[#00d9ff] !text-[#0a192f] hover:!bg-[#00d9ff]/80 hover:!border-[#00d9ff]/80"
       >
-        <template #icon><Plus class="w-4 h-4" /></template>
+        <Plus class="w-4 h-4 inline-block align-text-bottom mr-1" />
         添加设备
       </a-button>
     </div>
@@ -393,6 +408,11 @@ function closeEditDialog() {
             <!-- Name column -->
             <template v-if="column.key === 'name'">
               <span class="text-white font-medium">{{ record.name }}</span>
+            </template>
+
+            <!-- serialNumber column -->
+            <template v-if="column.key === 'serialNumber'">
+              <span class="text-white font-medium">{{ record.serialNumber }}</span>
             </template>
 
             <!-- IP column -->
@@ -484,128 +504,154 @@ function closeEditDialog() {
       v-model:open="dialogs.add"
       title="添加设备"
       :footer="null"
-      :width="512"
+      :width="'60%'"
       :mask-closable="false"
       class="device-dialog"
     >
       <div class="grid gap-4 py-4">
-        <div class="grid gap-2">
-          <label class="text-[#8892a0]">名称</label>
-          <input
-            :value="formData.name"
-            @input="updateForm('name', ($event.target as HTMLInputElement).value)"
-            placeholder="请输入设备名称"
-            class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-          />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">IP地址</label>
+        <div class="flex items-center gap-4">
+          <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">名称</label>
+          <div class="flex-1">
             <input
-              :value="formData.ip"
-              @input="updateForm('ip', ($event.target as HTMLInputElement).value)"
-              placeholder="192.168.1.100"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
+              :value="formData.name"
+              @input="updateForm('name', ($event.target as HTMLInputElement).value)"
+              placeholder="请输入设备名称"
+              :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full transition-colors', formErrors.name ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
             />
+            <p v-if="formErrors.name" class="text-xs text-[#ef4444] mt-1">{{ formErrors.name }}</p>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">序列号</label>
+        </div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">IP地址</label>
+            <div class="flex-1">
+              <input
+                :value="formData.ip"
+                @input="updateForm('ip', ($event.target as HTMLInputElement).value)"
+                placeholder="192.168.1.100"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full font-mono transition-colors', formErrors.ip ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p v-if="formErrors.ip" class="text-xs text-[#ef4444] mt-1">{{ formErrors.ip }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">序列号</label>
+            <div class="flex-1">
+              <input
+                :value="formData.serialNumber"
+                @input="updateForm('serialNumber', ($event.target as HTMLInputElement).value)"
+                placeholder="设备序列号"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full transition-colors', formErrors.serialNumber ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p v-if="formErrors.serialNumber" class="text-xs text-[#ef4444] mt-1">{{ formErrors.serialNumber }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">安装位置</label>
+          <div class="flex-1">
             <input
-              :value="formData.serialNumber"
-              @input="updateForm('serialNumber', ($event.target as HTMLInputElement).value)"
-              placeholder="设备序列号"
+              :value="formData.location"
+              @input="updateForm('location', ($event.target as HTMLInputElement).value)"
+              placeholder="如：一楼入口（可选）"
               class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
             />
           </div>
         </div>
-        <div class="grid gap-2">
-          <label class="text-[#8892a0]">安装位置</label>
-          <input
-            :value="formData.location"
-            @input="updateForm('location', ($event.target as HTMLInputElement).value)"
-            placeholder="如：一楼入口"
-            class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-          />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">型号</label>
-            <a-select
-              :value="formData.model"
-              @change="(v: string) => updateForm('model', v)"
-              class="w-full"
-              popup-class-name="dark-select-dropdown"
-            >
-              <a-select-option value="大华">大华</a-select-option>
-              <a-select-option value="海康威视">海康威视</a-select-option>
-              <a-select-option value="通用">通用</a-select-option>
-            </a-select>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">型号</label>
+            <div class="flex-1">
+              <a-select
+                :value="formData.model"
+                @change="(v: string) => updateForm('model', v)"
+                class="w-full"
+                popup-class-name="dark-select-dropdown"
+              >
+                <a-select-option value="大华">大华</a-select-option>
+                <a-select-option value="海康威视">海康威视</a-select-option>
+                <a-select-option value="通用">通用</a-select-option>
+              </a-select>
+            </div>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">RTSP端口</label>
-            <input
-              type="number"
-              :value="formData.rtspPort"
-              @input="updateForm('rtspPort', Number(($event.target as HTMLInputElement).value))"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-            />
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">RTSP端口</label>
+            <div class="flex-1">
+              <input
+                type="number"
+                :value="formData.rtspPort"
+                @input="updateForm('rtspPort', Number(($event.target as HTMLInputElement).value))"
+                placeholder="554"
+                class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
+              />
+            </div>
           </div>
         </div>
 
         <!-- Dahua SDK specific fields -->
-        <div v-if="formData.model === '大华'" class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">SDK端口</label>
-            <input
-              type="number"
-              :value="formData.sdkPort"
-              @input="updateForm('sdkPort', Number(($event.target as HTMLInputElement).value))"
-              placeholder="37777"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-            />
-            <p class="text-[10px] text-[#8892a0]/60">大华默认 37777</p>
+        <div v-if="formData.model === '大华'" class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-start gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right pt-2">SDK端口</label>
+            <div class="flex-1">
+              <input
+                type="number"
+                :value="formData.sdkPort"
+                @input="updateForm('sdkPort', Number(($event.target as HTMLInputElement).value))"
+                placeholder="37777"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full font-mono transition-colors', formErrors.sdkPort ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p class="text-[10px] text-[#8892a0]/60">大华默认 37777</p>
+            </div>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">客流通道号</label>
-            <input
-              type="number"
-              :value="formData.channel"
-              @input="updateForm('channel', Number(($event.target as HTMLInputElement).value))"
-              placeholder="0"
-              min="0"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-            />
-            <p class="text-[10px] text-[#8892a0]/60">从0开始, 通常是0</p>
+          <div class="flex items-start gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right pt-2">通道号</label>
+            <div class="flex-1">
+              <input
+                type="number"
+                :value="formData.channel"
+                @input="updateForm('channel', Number(($event.target as HTMLInputElement).value))"
+                placeholder="0"
+                min="0"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full font-mono transition-colors', formErrors.channel ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p class="text-[10px] text-[#8892a0]/60">从0开始, 通常是0</p>
+            </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">用户名</label>
-            <input
-              :value="formData.username"
-              @input="updateForm('username', ($event.target as HTMLInputElement).value)"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-            />
+        <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">用户名</label>
+            <div class="flex-1">
+              <input
+                :value="formData.username"
+                @input="updateForm('username', ($event.target as HTMLInputElement).value)"
+                class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
+              />
+            </div>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">密码</label>
-            <input
-              type="password"
-              :value="formData.password"
-              @input="updateForm('password', ($event.target as HTMLInputElement).value)"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-            />
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">密码</label>
+            <div class="flex-1">
+              <input
+                type="password"
+                :value="formData.password"
+                @input="updateForm('password', ($event.target as HTMLInputElement).value)"
+                class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
+              />
+            </div>
           </div>
         </div>
-        <div class="grid gap-2">
-          <label class="text-[#8892a0]">RTSP地址</label>
-          <input
-            :value="formData.rtspUrl"
-            @input="updateForm('rtspUrl', ($event.target as HTMLInputElement).value)"
-            placeholder="自动生成"
-            class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-xs outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-          />
+        <div class="flex items-center gap-4">
+          <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">RTSP地址</label>
+          <div class="flex-1">
+            <input
+              :value="formData.rtspUrl"
+              @input="updateForm('rtspUrl', ($event.target as HTMLInputElement).value)"
+              placeholder="自动生成"
+              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-xs outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
+            />
+          </div>
         </div>
         <div v-if="saveMessage" class="text-xs text-[#00ff88] bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-md p-2">
           {{ saveMessage }}
@@ -620,7 +666,7 @@ function closeEditDialog() {
         </button>
         <button
           @click="handleSave"
-          :disabled="saving || !formData.name || !formData.ip"
+          :disabled="saving"
           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-[#00d9ff] text-[#0a192f] hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
@@ -634,119 +680,147 @@ function closeEditDialog() {
       v-model:open="dialogs.edit"
       title="编辑设备"
       :footer="null"
-      :width="512"
+      :width="'60%'"
       :mask-closable="false"
       class="device-dialog"
     >
       <div class="grid gap-4 py-4">
-        <div class="grid gap-2">
-          <label class="text-[#8892a0]">名称</label>
-          <input
-            :value="formData.name"
-            @input="updateForm('name', ($event.target as HTMLInputElement).value)"
-            class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-          />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">IP地址</label>
+        <div class="flex items-center gap-4">
+          <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">名称</label>
+          <div class="flex-1">
             <input
-              :value="formData.ip"
-              @input="updateForm('ip', ($event.target as HTMLInputElement).value)"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
+              :value="formData.name"
+              @input="updateForm('name', ($event.target as HTMLInputElement).value)"
+              :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full transition-colors', formErrors.name ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
             />
+            <p v-if="formErrors.name" class="text-xs text-[#ef4444] mt-1">{{ formErrors.name }}</p>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">序列号</label>
+        </div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">IP地址</label>
+            <div class="flex-1">
+              <input
+                :value="formData.ip"
+                @input="updateForm('ip', ($event.target as HTMLInputElement).value)"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full font-mono transition-colors', formErrors.ip ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p v-if="formErrors.ip" class="text-xs text-[#ef4444] mt-1">{{ formErrors.ip }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">序列号</label>
+            <div class="flex-1">
+              <input
+                :value="formData.serialNumber"
+                @input="updateForm('serialNumber', ($event.target as HTMLInputElement).value)"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full transition-colors', formErrors.serialNumber ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p v-if="formErrors.serialNumber" class="text-xs text-[#ef4444] mt-1">{{ formErrors.serialNumber }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">安装位置</label>
+          <div class="flex-1">
             <input
-              :value="formData.serialNumber"
-              @input="updateForm('serialNumber', ($event.target as HTMLInputElement).value)"
+              :value="formData.location"
+              @input="updateForm('location', ($event.target as HTMLInputElement).value)"
+              placeholder="如：一楼入口（可选）"
               class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
             />
           </div>
         </div>
-        <div class="grid gap-2">
-          <label class="text-[#8892a0]">安装位置</label>
-          <input
-            :value="formData.location"
-            @input="updateForm('location', ($event.target as HTMLInputElement).value)"
-            class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-          />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">型号</label>
-            <a-select
-              :value="formData.model"
-              @change="(v: string) => updateForm('model', v)"
-              class="w-full"
-              popup-class-name="dark-select-dropdown"
-            >
-              <a-select-option value="大华">大华</a-select-option>
-              <a-select-option value="海康威视">海康威视</a-select-option>
-              <a-select-option value="通用">通用</a-select-option>
-            </a-select>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">型号</label>
+            <div class="flex-1">
+              <a-select
+                :value="formData.model"
+                @change="(v: string) => updateForm('model', v)"
+                class="w-full"
+                popup-class-name="dark-select-dropdown"
+              >
+                <a-select-option value="大华">大华</a-select-option>
+                <a-select-option value="海康威视">海康威视</a-select-option>
+                <a-select-option value="通用">通用</a-select-option>
+              </a-select>
+            </div>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">RTSP端口</label>
-            <input
-              type="number"
-              :value="formData.rtspPort"
-              @input="updateForm('rtspPort', Number(($event.target as HTMLInputElement).value))"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-            />
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">RTSP端口</label>
+            <div class="flex-1">
+              <input
+                type="number"
+                :value="formData.rtspPort"
+                @input="updateForm('rtspPort', Number(($event.target as HTMLInputElement).value))"
+                class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
+              />
+            </div>
           </div>
         </div>
 
         <!-- Dahua SDK specific fields -->
-        <div v-if="formData.model === '大华'" class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">SDK端口</label>
-            <input
-              type="number"
-              :value="formData.sdkPort"
-              @input="updateForm('sdkPort', Number(($event.target as HTMLInputElement).value))"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-            />
+        <div v-if="formData.model === '大华'" class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-start gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right pt-2">SDK端口</label>
+            <div class="flex-1">
+              <input
+                type="number"
+                :value="formData.sdkPort"
+                @input="updateForm('sdkPort', Number(($event.target as HTMLInputElement).value))"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full font-mono transition-colors', formErrors.sdkPort ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p class="text-[10px] text-[#8892a0]/60">大华默认 37777</p>
+            </div>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">客流通道号</label>
-            <input
-              type="number"
-              :value="formData.channel"
-              @input="updateForm('channel', Number(($event.target as HTMLInputElement).value))"
-              min="0"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-            />
+          <div class="flex items-start gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right pt-2">通道号</label>
+            <div class="flex-1">
+              <input
+                type="number"
+                :value="formData.channel"
+                @input="updateForm('channel', Number(($event.target as HTMLInputElement).value))"
+                min="0"
+                :class="['bg-[#0a192f] border text-white rounded-md px-3 py-2 text-sm outline-none w-full font-mono transition-colors', formErrors.channel ? 'border-[#ef4444]' : 'border-[#1e293b] focus:border-[#00d9ff]']"
+              />
+              <p class="text-[10px] text-[#8892a0]/60">从0开始, 通常是0</p>
+            </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">用户名</label>
-            <input
-              :value="formData.username"
-              @input="updateForm('username', ($event.target as HTMLInputElement).value)"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-            />
+        <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">用户名</label>
+            <div class="flex-1">
+              <input
+                :value="formData.username"
+                @input="updateForm('username', ($event.target as HTMLInputElement).value)"
+                class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
+              />
+            </div>
           </div>
-          <div class="grid gap-2">
-            <label class="text-[#8892a0]">密码</label>
-            <input
-              type="password"
-              :value="formData.password"
-              @input="updateForm('password', ($event.target as HTMLInputElement).value)"
-              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
-            />
+          <div class="flex items-center gap-4">
+            <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">密码</label>
+            <div class="flex-1">
+              <input
+                type="password"
+                :value="formData.password"
+                @input="updateForm('password', ($event.target as HTMLInputElement).value)"
+                class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-sm outline-none focus:border-[#00d9ff] w-full transition-colors"
+              />
+            </div>
           </div>
         </div>
-        <div class="grid gap-2">
-          <label class="text-[#8892a0]">RTSP地址</label>
-          <input
-            :value="formData.rtspUrl"
-            @input="updateForm('rtspUrl', ($event.target as HTMLInputElement).value)"
-            class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-xs outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
-          />
+        <div class="flex items-center gap-4">
+          <label class="text-[#8892a0] w-20 flex-shrink-0 text-right">RTSP地址</label>
+          <div class="flex-1">
+            <input
+              :value="formData.rtspUrl"
+              @input="updateForm('rtspUrl', ($event.target as HTMLInputElement).value)"
+              class="bg-[#0a192f] border border-[#1e293b] text-white rounded-md px-3 py-2 text-xs outline-none focus:border-[#00d9ff] w-full font-mono transition-colors"
+            />
+          </div>
         </div>
         <div v-if="saveMessage" class="text-xs text-[#00ff88] bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-md p-2">
           {{ saveMessage }}
@@ -761,7 +835,7 @@ function closeEditDialog() {
         </button>
         <button
           @click="handleSave"
-          :disabled="saving || !formData.name || !formData.ip"
+          :disabled="saving"
           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-[#00d9ff] text-[#0a192f] hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
@@ -830,45 +904,23 @@ function closeEditDialog() {
       :width="1200"
       :closable="true"
       :mask-closable="true"
-      :body-style="{ padding: 0, overflow: 'hidden', height: '86vh', maxHeight: '900px', display: 'flex', flexDirection: 'column' }"
+      :body-style="{ padding: 0, overflow: 'hidden', height: '80vh' }"
       :wrap-class-name="'preview-dialog-wrapper'"
       @cancel="closePreview"
     >
       <template #title>
-        <div class="flex flex-col gap-4">
-          <div class="space-y-2">
-            <h2 class="text-2xl font-semibold tracking-tight text-white">
-              视频预览 - {{ previewDevice?.name || '' }}
-            </h2>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#9fb3c8]">
-              <span class="font-medium text-white">{{ previewDevice?.name || '' }}</span>
-              <span>{{ previewDevice?.ip }}</span>
-              <span>{{ previewDevice?.location }}</span>
-            </div>
-          </div>
-          <div v-if="previewDevice?.rtspUrl" class="rounded-lg border border-[#233554] bg-[#0f1b33]/90 px-3 py-2">
-            <p class="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[#00d9ff]/70">
-              RTSP 地址
-            </p>
-            <p class="truncate font-mono text-xs text-[#7f8ea3]">
-              {{ previewDevice.rtspUrl }}
-            </p>
-          </div>
-        </div>
+        <span class="text-white">{{ previewDevice?.name || '' }}</span>
       </template>
-      <div class="min-h-0 flex-1 bg-[#09111f] p-4 sm:p-5">
-        <div class="h-full overflow-hidden rounded-xl border border-[#1e293b] bg-black shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
-          <RTSPVideoPlayer
-            v-if="previewDevice"
-            :device-id="previewDevice.id"
-            :name="previewDevice.name"
-            :status="previewDevice.status"
-            :auto-play="true"
-            :show-controls="true"
-            :compact="false"
-            class="w-full h-full"
-          />
-        </div>
+      <div class="h-full">
+        <RTSPVideoPlayer
+          v-if="previewDevice"
+          :device-id="previewDevice.id"
+          :status="previewDevice.status"
+          :auto-play="true"
+          :show-controls="true"
+          :compact="false"
+          class="w-full h-full"
+        />
       </div>
     </a-modal>
 

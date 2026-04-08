@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Key, Copy, Check, Loader2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { message } from 'ant-design-vue'
 
 interface LicenseData {
   hardwareFingerprint: string
@@ -42,7 +42,7 @@ async function fetchLicense() {
       }
     }
   } catch {
-    toast.error('加载License信息失败')
+    message.error('加载License信息失败')
   } finally {
     loading.value = false
   }
@@ -50,7 +50,7 @@ async function fetchLicense() {
 
 async function handleActivate() {
   if (!activationCode.value.trim()) {
-    toast.error('请输入激活码')
+    message.error('请输入激活码')
     return
   }
   activating.value = true
@@ -73,13 +73,13 @@ async function handleActivate() {
         remainingDays: data.remainingDays || 0,
       }
       activationCode.value = ''
-      toast.success(license.value.isActive ? '授权已更新' : '激活成功')
+      message.success(license.value.isActive ? '授权已更新' : '激活成功')
     } else {
       const errJson = await res.json().catch(() => ({}))
-      toast.error(errJson.message || '激活失败')
+      message.error(errJson.message || '激活失败')
     }
   } catch {
-    toast.error('激活失败')
+    message.error('激活失败')
   } finally {
     activating.value = false
   }
@@ -89,10 +89,10 @@ async function handleCopyFingerprint() {
   try {
     await navigator.clipboard.writeText(license.value.hardwareFingerprint)
     copied.value = true
-    toast.success('硬件指纹已复制')
+    message.success('硬件指纹已复制')
     setTimeout(() => { copied.value = false }, 2000)
   } catch {
-    toast.error('复制失败')
+    message.error('复制失败')
   }
 }
 

@@ -2,7 +2,7 @@
 FluxaVision 客流统计系统 - 一键构建脚本 (Linux/macOS)
 
 构建流程:
-  1. 构建 Next.js 前端静态文件
+  1. 构建 Vue 3 + Vite 前端静态文件
   2. 将静态文件复制到 backend/frontend-build/
   3. 使用 PyInstaller 打包 Python 后端 + 前端 → dist/FluxaVision/
 
@@ -24,8 +24,7 @@ import subprocess
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 FRONTEND_BUILD_DIR = os.path.join(SCRIPT_DIR, "frontend-build")
-NEXT_CONFIG_BUILD = os.path.join(PROJECT_DIR, "next.config.build.ts")
-NEXT_CONFIG_DEV = os.path.join(PROJECT_DIR, "next.config.ts")
+FRONTEND_VUE_DIR = os.path.join(PROJECT_DIR, "frontend-vue")
 
 
 def run_cmd(cmd: str, cwd: str, description: str) -> bool:
@@ -44,62 +43,31 @@ def run_cmd(cmd: str, cwd: str, description: str) -> bool:
 
 
 def build_frontend():
-    """步骤1: 构建 Next.js 静态导出"""
-    # 临时切换 next.config.ts 为静态导出模式
-    build_config = '''import type { NextConfig } from "next";
-const nextConfig: NextConfig = {
-  output: "export",
-  typescript: { ignoreBuildErrors: true },
-  reactStrictMode: false,
-  // 静态导出不支持 rewrites
-  images: { unoptimized: true },
-};
-export default nextConfig;
-'''
+    """步骤1: 构建 Vue 3 + Vite 前端静态文件"""
+    print(f"\n[1/4] 构建 Vue 前端静态文件...")
 
-    print(f"\n[1/4] 构建 Next.js 前端静态文件...")
-
-    # 备份原始配置
-    if os.path.exists(NEXT_CONFIG_DEV):
-        shutil.copy2(NEXT_CONFIG_DEV, NEXT_CONFIG_DEV + ".bak")
-
-    # 写入构建配置
-    with open(NEXT_CONFIG_DEV, "w", encoding="utf-8") as f:
-        f.write(build_config)
-
-    try:
-        # 清理旧的构建输出
-        out_dir = os.path.join(PROJECT_DIR, "out")
-        if os.path.exists(out_dir):
-            shutil.rmtree(out_dir)
-
-        # 安装依赖（如果需要）
-        if not os.path.exists(os.path.join(PROJECT_DIR, "node_modules")):
-            if not run_cmd("npm install", PROJECT_DIR, "安装 Node.js 依赖"):
-                return False
-
-        # 构建 Next.js
-        if not run_cmd("npx next build", PROJECT_DIR, "Next.js 静态导出"):
+    # 安装依赖（如果需要）
+    if not os.path.exists(os.path.join(FRONTEND_VUE_DIR, "node_modules")):
+        if not run_cmd("npm install", FRONTEND_VUE_DIR, "安装 Vue 前端依赖"):
             return False
 
-        # 检查输出
-        if not os.path.isdir(out_dir):
-            print(f"✗ 未找到构建输出目录: {out_dir}")
-            return False
+    # 构建 Vue
+    if not run_cmd("npm run build", FRONTEND_VUE_DIR, "Vite 构建"):
+        return False
 
-        # 复制到 frontend-build
-        if os.path.exists(FRONTEND_BUILD_DIR):
-            shutil.rmtree(FRONTEND_BUILD_DIR)
-        shutil.copytree(out_dir, FRONTEND_BUILD_DIR)
+    # 检查输出
+    dist_dir = os.path.join(FRONTEND_VUE_DIR, "dist")
+    if not os.path.isdir(dist_dir):
+        print(f"✗ 未找到构建输出目录: {dist_dir}")
+        return False
 
-        print(f"✓ 前端静态文件已复制到: {FRONTEND_BUILD_DIR}")
-        return True
+    # 复制到 frontend-build
+    if os.path.exists(FRONTEND_BUILD_DIR):
+        shutil.rmtree(FRONTEND_BUILD_DIR)
+    shutil.copytree(dist_dir, FRONTEND_BUILD_DIR)
 
-    finally:
-        # 恢复原始配置
-        if os.path.exists(NEXT_CONFIG_DEV + ".bak"):
-            shutil.copy2(NEXT_CONFIG_DEV + ".bak", NEXT_CONFIG_DEV)
-            os.remove(NEXT_CONFIG_DEV + ".bak")
+    print(f"✓ 前端静态文件已复制到: {FRONTEND_BUILD_DIR}")
+    return True
 
 
 def build_pyinstaller():

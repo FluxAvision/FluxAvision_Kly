@@ -49,7 +49,7 @@ class Device(Base):
     name         = Column(String(100), nullable=False, comment="设备名称")
     ip           = Column(String(45), nullable=False, comment="IP地址")
     serialNumber = Column(String(100), nullable=False, unique=True, comment="序列号")
-    location     = Column(String(200), nullable=False, comment="安装位置")
+    location     = Column(String(200), nullable=True, default="", comment="安装位置")
     model        = Column(String(50), default="大华", comment="型号")
     rtspPort     = Column(Integer, default=554, comment="RTSP端口")
     username     = Column(String(50), default="admin", comment="用户名")
@@ -91,6 +91,7 @@ class SystemSettings(Base):
     storeLogo       = Column(String(500), default="", comment="门店Logo路径")
     loginPassword   = Column(EncryptedString, default="", comment="登录密码(加密)")
     dashboardMetrics = Column(String(200), default="todayIn,todayOut,currentIn,weekIn", comment="仪表盘显示指标")
+    dashboardMetricsLabels = Column(Text, default="", comment="指标自定义标签(JSON)")
     createdAt       = Column(DateTime, default=_utcnow)
     updatedAt       = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -115,12 +116,20 @@ class LargeScreenSettings(Base):
 class ScreenTemplate(Base):
     __tablename__ = "screen_templates"
 
-    id          = Column(String(36), primary_key=True, default=lambda: _generate_cuid())
-    name        = Column(String(100), nullable=False, comment="模板名称")
-    description = Column(String(500), default="", comment="模板描述")
-    thumbnail   = Column(String(500), default="", comment="缩略图")
-    layout      = Column(String(50), default="default", comment="布局类型")
-    createdAt   = Column(DateTime, default=_utcnow)
+    id              = Column(String(36), primary_key=True, default=lambda: _generate_cuid())
+    name            = Column(String(100), nullable=False, comment="模板名称")
+    description     = Column(String(500), default="", comment="模板描述")
+    thumbnail       = Column(String(500), default="", comment="缩略图")
+    layout          = Column(String(50), default="default", comment="布局类型")
+    templateConfig  = Column(Text, default="{}", comment="模板配置JSON")
+    canvasWidth     = Column(Integer, default=1920, comment="画布宽度")
+    canvasHeight    = Column(Integer, default=1080, comment="画布高度")
+    backgroundColor = Column(String(20), default="#0a192f", comment="背景颜色")
+    backgroundImage = Column(String(500), default="", comment="背景图片")
+    isSystem        = Column(Boolean, default=False, comment="是否系统模板")
+    isPublished     = Column(Boolean, default=True, comment="是否发布")
+    createdAt       = Column(DateTime, default=_utcnow)
+    updatedAt       = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # ==================== License管理 ====================

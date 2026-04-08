@@ -75,6 +75,34 @@ def _migrate_database(engine):
         if "channel" not in existing_cols:
             migrations.append("ALTER TABLE devices ADD COLUMN channel INTEGER DEFAULT 0")
 
+        # system_settings 表迁移
+        try:
+            settings_cols = {col["name"] for col in inspector.get_columns("system_settings")}
+        except Exception:
+            settings_cols = set()
+        if "dashboardMetricsLabels" not in settings_cols:
+            migrations.append("ALTER TABLE system_settings ADD COLUMN dashboardMetricsLabels TEXT DEFAULT ''")
+
+        # screen_templates 表迁移
+        try:
+            template_cols = {col["name"] for col in inspector.get_columns("screen_templates")}
+        except Exception:
+            template_cols = set()
+
+        template_migrations = [
+            ("templateConfig", "TEXT DEFAULT '{}'"),
+            ("canvasWidth", "INTEGER DEFAULT 1920"),
+            ("canvasHeight", "INTEGER DEFAULT 1080"),
+            ("backgroundColor", "VARCHAR(20) DEFAULT '#0a192f'"),
+            ("backgroundImage", "VARCHAR(500) DEFAULT ''"),
+            ("isSystem", "BOOLEAN DEFAULT 0"),
+            ("isPublished", "BOOLEAN DEFAULT 1"),
+            ("updatedAt", "DATETIME"),
+        ]
+        for col_name, col_def in template_migrations:
+            if col_name not in template_cols:
+                migrations.append(f"ALTER TABLE screen_templates ADD COLUMN {col_name} {col_def}")
+
         for sql in migrations:
             try:
                 conn.execute(text(sql))

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Toaster } from 'vue-sonner'
-import { ConfigProvider } from 'ant-design-vue'
+import { ConfigProvider, message } from 'ant-design-vue'
 import { antdTheme } from '@/lib/antd-theme'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import Header from '@/components/layout/Header.vue'
@@ -10,11 +9,19 @@ import DeviceManagement from '@/components/devices/DeviceManagement.vue'
 import HistoryData from '@/components/history/HistoryData.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
 import LargeScreenSettings from '@/components/settings/LargeScreenSettings.vue'
-import LargeScreenView from '@/components/large-screen/LargeScreenView.vue'
+import LicenseSettings from '@/components/settings/LicenseSettings.vue'
 import LoginPage from '@/components/auth/LoginPage.vue'
+
+// 配置 message
+message.config({
+  top: '60px',
+  duration: 3,
+  maxCount: 3,
+})
 
 interface LicenseData {
   isActive: boolean
+  isExpired: boolean
   hardwareFingerprint: string
   expiryDate: string
   maxDevices: number
@@ -24,6 +31,7 @@ interface SettingsData {
   storeName: string
   loginPassword: string
   dashboardMetrics: string
+  dashboardMetricsLabels: string
 }
 
 const pageTitles: Record<string, string> = {
@@ -32,16 +40,41 @@ const pageTitles: Record<string, string> = {
   history: '历史数据',
   settings: '系统设置',
   'large-screen-settings': '大屏设置',
+  'license-settings': 'License管理',
+}
+
+const AUTH_TOKEN_KEY = 'fluxavision_auth_token'
+const TOKEN_EXPIRY_DAYS = 30
+
+function isAuthTokenValid(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTH_TOKEN_KEY)
+    if (!raw) return false
+    const data = JSON.parse(raw)
+    if (!data.ts) return false
+    return (Date.now() - data.ts) < TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+  } catch {
+    return false
+  }
+}
+
+function saveAuthToken() {
+  localStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify({ ts: Date.now() }))
+}
+
+function clearAuthToken() {
+  localStorage.removeItem(AUTH_TOKEN_KEY)
 }
 
 const currentPage = ref('dashboard')
-const isLoggedIn = ref(false)
+const isLoggedIn = ref(isAuthTokenValid())
 const isLoading = ref(true)
 const isLicensed = ref(false)
 const hasPassword = ref(false)
 const hardwareFingerprint = ref('')
 const storeName = ref('我的门店')
 const dashboardMetrics = ref('todayIn,todayOut,currentIn,weekIn')
+const dashboardMetricsLabels = ref('')
 
 const pageTitle = computed(() => pageTitles[currentPage.value] || '仪表盘')
 
@@ -55,7 +88,11 @@ async function checkSystemStatus() {
     if (licenseRes.ok) {
       const licenseJson = await licenseRes.json()
       const license: LicenseData = licenseJson.data || licenseJson
-      isLicensed.value = license.isActive
+      isLicensed.value = license.isActive && !license.isExpired
+      if (license.isExpired) {
+        clearAuthToken()
+        isLoggedIn.value = false
+      }
       hardwareFingerprint.value = license.hardwareFingerprint || ''
     }
 
@@ -65,6 +102,7 @@ async function checkSystemStatus() {
       storeName.value = settings.storeName || '我的门店'
       hasPassword.value = !!settings.loginPassword
       dashboardMetrics.value = settings.dashboardMetrics || 'todayIn,todayOut,currentIn,weekIn'
+      dashboardMetricsLabels.value = settings.dashboardMetricsLabels || ''
     }
   } catch {
     // Keep defaults
@@ -83,7 +121,7 @@ async function handleActivateLicense(code: string) {
     if (res.ok) {
       const json = await res.json()
       const license = json.data || json
-      isLicensed.value = license.isActive
+      isLicensed.value = license.isActive && !license.isExpired
     }
   } catch {
     // Handle error
@@ -92,6 +130,7 @@ async function handleActivateLicense(code: string) {
 
 function handleLogin() {
   isLoggedIn.value = true
+  saveAuthToken()
 }
 
 function handlePageChange(page: string) {
@@ -99,11 +138,8 @@ function handlePageChange(page: string) {
 }
 
 function navigateToScreen() {
-  currentPage.value = 'large-screen'
-}
-
-function handleCloseLargeScreen() {
-  currentPage.value = 'dashboard'
+  // 在新窗口打开大屏页面
+  window.open('/large-screen.html', '_blank')
 }
 
 onMounted(() => {
@@ -149,12 +185,6 @@ onMounted(() => {
       {{ isLoggedIn = true }}
     </template>
 
-    <!-- Large screen mode -->
-    <LargeScreenView
-      v-else-if="currentPage === 'large-screen'"
-      @close="handleCloseLargeScreen"
-    />
-
     <!-- Main layout -->
     <div v-else class="min-h-screen bg-[#0a192f]">
       <Sidebar
@@ -168,15 +198,15 @@ onMounted(() => {
           <Dashboard
             v-if="currentPage === 'dashboard'"
             :dashboard-metrics="dashboardMetrics"
+            :dashboard-metrics-labels="dashboardMetricsLabels"
           />
           <DeviceManagement v-else-if="currentPage === 'devices'" />
           <HistoryData v-else-if="currentPage === 'history'" />
           <SystemSettings v-else-if="currentPage === 'settings'" />
           <LargeScreenSettings v-else-if="currentPage === 'large-screen-settings'" />
+          <LicenseSettings v-else-if="currentPage === 'license-settings'" />
         </main>
       </div>
     </div>
-
-    <Toaster />
   </ConfigProvider>
 </template>

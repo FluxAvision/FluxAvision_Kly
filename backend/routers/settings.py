@@ -43,6 +43,7 @@ async def update_settings(request: Request):
                 storeLogo=body.get("storeLogo", ""),
                 loginPassword=body.get("loginPassword", ""),
                 dashboardMetrics=body.get("dashboardMetrics", "todayIn,todayOut,currentIn,weekIn"),
+                dashboardMetricsLabels=body.get("dashboardMetricsLabels", ""),
             )
             session.add(settings)
         else:
@@ -54,6 +55,8 @@ async def update_settings(request: Request):
                 settings.loginPassword = body["loginPassword"]
             if "dashboardMetrics" in body:
                 settings.dashboardMetrics = body["dashboardMetrics"]
+            if "dashboardMetricsLabels" in body:
+                settings.dashboardMetricsLabels = body["dashboardMetricsLabels"]
         
         session.commit()
         session.refresh(settings)

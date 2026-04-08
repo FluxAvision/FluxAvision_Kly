@@ -14,6 +14,10 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        'large-screen': resolve(__dirname, 'large-screen.html'),
+      },
       output: {
         assetFileNames: 'assets/[name]-[hash][extname]',
         chunkFileNames: 'assets/[name]-[hash].js',

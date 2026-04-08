@@ -61,6 +61,7 @@ export function useLargeScreenData() {
 
   const hourlyData = ref<HourlyData[]>([])
   const devices = ref<Device[]>([])
+  const allDevices = ref<Device[]>([])  // 所有设备，用于自定义模板
   const loading = ref(true)
   let interval: ReturnType<typeof setInterval> | null = null
 
@@ -123,11 +124,12 @@ export function useLargeScreenData() {
       }
       if (devRes.ok) {
         const json = await devRes.json()
-        const allDevices: Device[] = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : [])
+        const deviceList: Device[] = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : [])
+        allDevices.value = deviceList  // 保存所有设备
         const effectiveIds = config.value.deviceIds.length > 0
           ? config.value.deviceIds
-          : allDevices.filter(d => d.status === 'online').slice(0, 4).map(d => d.id)
-        devices.value = allDevices.filter((d) => effectiveIds.includes(d.id))
+          : deviceList.filter(d => d.status === 'online').slice(0, 4).map(d => d.id)
+        devices.value = deviceList.filter((d) => effectiveIds.includes(d.id))
       }
       if (settingsRes.ok) {
         const json = await settingsRes.json()
@@ -161,6 +163,7 @@ export function useLargeScreenData() {
     metrics,
     hourlyData,
     devices,
+    allDevices,
     storeLogo,
     customLabels,
     loading,

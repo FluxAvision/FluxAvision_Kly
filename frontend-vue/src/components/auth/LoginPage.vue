@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Shield, KeyRound, ArrowRight, Loader2 } from 'lucide-vue-next'
+import { Shield, KeyRound, ArrowRight, Loader2, Copy, Check } from 'lucide-vue-next'
+import { message } from 'ant-design-vue'
 
 const props = defineProps<{
   hasPassword: boolean
@@ -17,6 +18,17 @@ const password = ref('')
 const activatingCode = ref('')
 const activating = ref(false)
 const error = ref('')
+const copied = ref(false)
+
+async function handleCopyFingerprint() {
+  try {
+    await navigator.clipboard.writeText(props.hardwareFingerprint)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // ignore
+  }
+}
 
 function handleActivate() {
   if (!activatingCode.value.trim()) return
@@ -67,7 +79,7 @@ function handleKeyDown(e: KeyboardEvent) {
       <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-8">
         <!-- License Activation -->
         <div v-if="!isLicensed" class="space-y-6">
-          <div class="flex items-center gap-3 mb-2">
+          <div class="flex items-center gap-3">
             <Shield class="w-5 h-5 text-[#ff9500]" />
             <h2 class="text-lg font-medium text-white">系统激活</h2>
           </div>
@@ -75,8 +87,19 @@ function handleKeyDown(e: KeyboardEvent) {
 
           <div class="grid gap-2">
             <label class="text-[#8892a0] text-xs">硬件指纹</label>
-            <div class="bg-[#0a192f] border border-[#1e293b] rounded-lg px-3 py-2 font-mono text-xs text-[#8892a0] break-all">
-              {{ hardwareFingerprint || '正在生成...' }}
+            <div class="flex items-center gap-2">
+              <div class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-lg px-3 py-2 font-mono text-xs text-[#8892a0] break-all">
+                {{ hardwareFingerprint || '正在生成...' }}
+              </div>
+              <button
+                :disabled="!hardwareFingerprint || copied"
+                class="flex items-center gap-1 px-2 py-2 bg-[#0a192f] border border-[#1e293b] rounded-lg text-xs text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
+                @click="handleCopyFingerprint"
+              >
+                <Check v-if="copied" class="w-3.5 h-3.5 text-[#00ff88]" />
+                <Copy v-else class="w-3.5 h-3.5" />
+                {{ copied ? '已复制' : '复制' }}
+              </button>
             </div>
           </div>
 
@@ -105,7 +128,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
         <!-- Password Login -->
         <div v-else-if="hasPassword" class="space-y-6">
-          <div class="flex items-center gap-3 mb-2">
+          <div class="flex items-center gap-3">
             <KeyRound class="w-5 h-5 text-[#00d9ff]" />
             <h2 class="text-lg font-medium text-white">登录系统</h2>
           </div>

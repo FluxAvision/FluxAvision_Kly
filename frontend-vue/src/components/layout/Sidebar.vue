@@ -6,6 +6,7 @@ import {
   Settings,
   Monitor,
   Presentation,
+  Key,
 } from 'lucide-vue-next'
 import { markRaw, type Component } from 'vue'
 
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
 const settingsItems: NavItem[] = [
   { id: 'settings', label: '系统设置', icon: markRaw(Settings) },
   { id: 'large-screen-settings', label: '大屏设置', icon: markRaw(Presentation) },
+  { id: 'license-settings', label: 'License管理', icon: markRaw(Key) },
 ]
 </script>
 

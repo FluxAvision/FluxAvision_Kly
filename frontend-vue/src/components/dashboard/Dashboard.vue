@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from 'vue'
 import {
-  LogIn, LogOut, Users, TrendingUp, TrendingDown, Camera, CalendarDays, Hash, Store, BarChart3,
+  LogIn, LogOut, Users, TrendingUp, TrendingDown, Camera, CalendarDays, Hash, Store,
 } from 'lucide-vue-next'
-import { Skeleton } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart } from 'echarts/charts'
+import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 
-use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
+use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 interface HourlyData {
   hour: number
@@ -66,6 +65,7 @@ interface MetricConfigItem {
 
 const props = defineProps<{
   dashboardMetrics?: string
+  dashboardMetricsLabels?: string
 }>()
 
 const metricConfig: Record<string, MetricConfigItem> = {
@@ -120,6 +120,13 @@ onUnmounted(() => {
 const storeName = computed(() => data.value?.storeName || '我的门店')
 const storeTotal = computed(() => data.value?.storeTotal)
 const metrics = computed(() => props.dashboardMetrics ? props.dashboardMetrics.split(',') : ['todayIn', 'todayOut', 'currentIn', 'weekIn'])
+const customLabels = computed(() => {
+  if (!props.dashboardMetricsLabels) return {}
+  try { return JSON.parse(props.dashboardMetricsLabels) } catch { return {} }
+})
+function getLabel(key: string): string {
+  return customLabels.value[key] || metricConfig[key]?.label || key
+}
 const hourlyData = computed(() =>
   (data.value?.hourlyToday || defaultHourlyData).map(h => ({
     ...h,
@@ -227,86 +234,6 @@ const hourlyChartOption = computed(() => ({
   ],
 }))
 
-const deviceBarChartOption = computed(() => {
-  const dt = devicesToday.value
-  if (dt.length === 0) return {}
-
-  return {
-    tooltip: {
-      trigger: 'axis' as const,
-      backgroundColor: '#172a45',
-      borderColor: '#1e293b',
-      borderWidth: 1,
-      borderRadius: 8,
-      textStyle: { color: '#ffffff' },
-      formatter(params: any[]) {
-        if (!Array.isArray(params)) return ''
-        let html = `<div style="font-size:12px;margin-bottom:4px;color:#8892a0">${params[0]?.axisValueLabel}</div>`
-        params.forEach((p: any) => {
-          const label = p.seriesName === 'countIn' ? '进人数' : '出人数'
-          html += `<div style="display:flex;align-items:center;gap:6px;margin:2px 0">
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
-            <span style="color:#8892a0">${label}</span>
-            <span style="color:#fff;font-weight:500;margin-left:auto">${Number(p.value).toLocaleString()}</span>
-          </div>`
-        })
-        return html
-      },
-    },
-    legend: {
-      data: ['countIn', 'countOut'],
-      top: 5,
-      formatter(name: string) {
-        return name === 'countIn' ? '进人数' : '出人数'
-      },
-      textStyle: { color: '#8892a0' },
-    },
-    grid: {
-      left: 40,
-      right: 20,
-      top: 40,
-      bottom: 35,
-    },
-    xAxis: {
-      type: 'category' as const,
-      data: dt.map(d => d.deviceName),
-      axisLine: { lineStyle: { color: '#8892a0' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#8892a0', fontSize: 11 },
-    },
-    yAxis: {
-      type: 'value' as const,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { color: '#8892a0', fontSize: 11 },
-      splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' as const } },
-    },
-    series: [
-      {
-        name: 'countIn',
-        type: 'bar',
-        data: dt.map((_, i) => ({
-          value: dt[i].todayIn,
-          itemStyle: { color: DEVICE_COLORS[i % DEVICE_COLORS.length], borderRadius: [4, 4, 0, 0] },
-        })),
-        barGap: '10%',
-      },
-      {
-        name: 'countOut',
-        type: 'bar',
-        data: dt.map((_, i) => ({
-          value: dt[i].todayOut,
-          itemStyle: {
-            color: DEVICE_COLORS[i % DEVICE_COLORS.length],
-            opacity: 0.6,
-            borderRadius: [4, 4, 0, 0],
-          },
-        })),
-      },
-    ],
-  }
-})
-
 function getMetricValue(key: string): number {
   if (!storeTotal.value) return 0
   return (storeTotal.value as any)[key] || 0
@@ -325,9 +252,9 @@ function getMetricValue(key: string): number {
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <template v-for="key in metrics" :key="key">
           <div v-if="metricConfig[key]" class="metric-card p-5">
-            <div class="flex items-start justify-between">
+            <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm text-[#8892a0] mb-1">{{ metricConfig[key].label }}</p>
+                <p class="text-sm text-[#8892a0] mb-1">{{ getLabel(key) }}</p>
                 <a-skeleton v-if="loading" class="h-8 w-24" :loading="true" :paragraph="false" />
                 <p v-else class="text-2xl font-bold text-white animate-count-up">
                   {{ getMetricValue(key).toLocaleString() }}
@@ -360,13 +287,9 @@ function getMetricValue(key: string): number {
     <!-- 各设备今日客流分栏明细 -->
     <div v-if="devicesToday.length > 0" class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
       <div class="flex items-center justify-between mb-4">
-        <div>
+        <div class="flex items-center gap-2">
           <h3 class="text-white font-medium">各设备今日客流</h3>
-          <p class="text-xs text-[#8892a0] mt-0.5">门店客流由 {{ devicesToday.length }} 台设备汇总得出</p>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <BarChart3 class="w-4 h-4 text-[#8892a0]" />
-          <span class="text-xs text-[#8892a0]">柱状对比</span>
+          <span class="text-xs text-[#8892a0]">门店客流由 {{ devicesToday.length }} 台设备汇总得出</span>
         </div>
       </div>
       <template v-if="loading">
@@ -431,14 +354,6 @@ function getMetricValue(key: string): number {
           </div>
         </div>
 
-        <!-- 各设备进入人数柱状图对比 -->
-        <VChart
-          v-if="devicesToday.length > 1"
-          :option="deviceBarChartOption"
-          class="w-full"
-          style="height: 180px"
-          autoresize
-        />
       </template>
     </div>
 

@@ -42,7 +42,7 @@ onUnmounted(() => {
       <span class="text-white font-medium">{{ title }}</span>
     </div>
 
-    <!-- Right: Store name + Time -->
+    <!-- Right: Store name + Time + Contact -->
     <div class="flex items-center gap-4">
       <span
         v-if="storeName"
@@ -53,6 +53,9 @@ onUnmounted(() => {
       <div class="flex items-center gap-2 text-sm text-[#8892a0]">
         <Clock class="w-4 h-4" />
         <span>{{ currentTime }}</span>
+      </div>
+      <div class="text-xs text-[#8892a0] border-l border-[#1e293b] pl-4">
+        客服: <span class="text-[#00d9ff]">13699764365</span> (微信同号)
       </div>
     </div>
   </header>

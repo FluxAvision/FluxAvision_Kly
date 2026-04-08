@@ -2,27 +2,27 @@
   <div class="space-y-4">
     <!-- Toolbar -->
     <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4">
-      <div class="flex items-end gap-4 flex-wrap">
-        <div class="grid gap-2">
-          <label class="text-[#8892a0] text-xs">开始日期</label>
-          <input
-            type="date"
-            :value="startDate"
-            @input="startDate = ($event.target as HTMLInputElement).value"
-            class="bg-[#0a192f] border-[#1e293b] w-44 rounded-md px-3 py-1.5 text-sm text-white outline-none focus:border-[#00d9ff]"
+      <div class="flex items-center gap-4 flex-wrap">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-[#8892a0]">开始日期</label>
+          <a-date-picker
+            :value="startDate ? dayjs(startDate) : null"
+            @change="(_d: any, dateStr: string) => startDate = dateStr"
+            class="history-date-picker"
+            placeholder=""
           />
         </div>
-        <div class="grid gap-2">
-          <label class="text-[#8892a0] text-xs">结束日期</label>
-          <input
-            type="date"
-            :value="endDate"
-            @input="endDate = ($event.target as HTMLInputElement).value"
-            class="bg-[#0a192f] border-[#1e293b] w-44 rounded-md px-3 py-1.5 text-sm text-white outline-none focus:border-[#00d9ff]"
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-[#8892a0]">结束日期</label>
+          <a-date-picker
+            :value="endDate ? dayjs(endDate) : null"
+            @change="(_d: any, dateStr: string) => endDate = dateStr"
+            class="history-date-picker"
+            placeholder=""
           />
         </div>
-        <div class="grid gap-2">
-          <label class="text-[#8892a0] text-xs">设备筛选</label>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-[#8892a0]">设备筛选</label>
           <a-select
             :value="selectedDevice"
             @change="selectedDevice = $event"
@@ -39,6 +39,13 @@
             </a-select-option>
           </a-select>
         </div>
+        <button
+          @click="fetchData"
+          :disabled="loading"
+          class="bg-[#00d9ff] text-[#0a192f] rounded-md px-4 py-2 text-xs font-medium transition-colors flex items-center gap-2 hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          查询
+        </button>
         <div class="flex border border-[#1e293b] rounded-lg overflow-hidden">
           <button
             @click="chartType = 'area'"
@@ -177,8 +184,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Download, BarChart3, LineChart, Camera } from 'lucide-vue-next'
+import dayjs from 'dayjs'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart as ELineChart, BarChart as EBarChart } from 'echarts/charts'
@@ -366,6 +374,7 @@ onMounted(() => {
         : []
     })
     .catch(() => {})
+  fetchData()
 })
 
 async function fetchData() {
@@ -415,13 +424,73 @@ function handleExportCSV() {
   link.click()
   URL.revokeObjectURL(url)
 }
-
-watch([startDate, endDate, selectedDevice], () => {
-  fetchData()
-})
 </script>
 
 <style scoped>
+:deep(.history-date-picker .ant-picker) {
+  background-color: #0a192f !important;
+  border-color: #1e293b !important;
+  color: #ffffff !important;
+  height: 36px !important;
+  border-radius: 0.375rem !important;
+  width: 160px !important;
+}
+
+:deep(.history-date-picker .ant-picker-input > input) {
+  color: #ffffff !important;
+}
+
+:deep(.history-date-picker .ant-picker-suffix) {
+  color: #8892a0 !important;
+}
+
+:deep(.ant-picker-dropdown) {
+  background-color: #112240 !important;
+  border-color: #1e293b !important;
+}
+
+:deep(.ant-picker-panel) {
+  background-color: #112240 !important;
+  border-color: #1e293b !important;
+}
+
+:deep(.ant-picker-header) {
+  border-bottom-color: #1e293b !important;
+}
+
+:deep(.ant-picker-header button) {
+  color: #8892a0 !important;
+}
+
+:deep(.ant-picker-content th) {
+  color: #8892a0 !important;
+}
+
+:deep(.ant-picker-cell) {
+  color: #ffffff !important;
+}
+
+:deep(.ant-picker-cell-in-view .ant-picker-cell-inner) {
+  color: #ffffff !important;
+}
+
+:deep(.ant-picker-cell:hover .ant-picker-cell-inner) {
+  background-color: #172a45 !important;
+}
+
+:deep(.ant-picker-cell-selected .ant-picker-cell-inner) {
+  background-color: #00d9ff !important;
+  color: #0a192f !important;
+}
+
+:deep(.ant-picker-today .ant-picker-cell-inner::before) {
+  border-color: #00d9ff !important;
+}
+
+:deep(.ant-picker-footer) {
+  border-top-color: #1e293b !important;
+}
+
 :deep(.ant-select-selector) {
   background-color: #0a192f !important;
   border-color: #1e293b !important;

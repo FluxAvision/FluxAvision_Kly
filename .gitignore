@@ -14,4 +14,6 @@ data/*.db-shm
 data/*.db-wal
 *.pyc
 out/
+frontend-vue/node_modules/
+frontend-vue/dist/
 
