@@ -4,7 +4,7 @@ title FluxaVision 客流统计系统 - 构建工具
 
 echo ══════════════════════════════════════════════════
 echo    FluxaVision 客流统计系统 - 一键构建脚本
-echo    Python后端 + Next.js前端 → exe安装包
+echo    Python后端 + Vue3前端 → exe安装包
 echo ══════════════════════════════════════════════════
 echo.
 
@@ -59,72 +59,45 @@ if %errorlevel% neq 0 (
 echo ✓ Python 依赖安装完成
 
 echo.
-echo [3/6] 安装 Node.js 依赖...
+echo [3/6] 安装 Vue 前端依赖...
 cd /d "%~dp0\.."
-if not exist node_modules (
+if not exist frontend-vue\node_modules (
+    cd frontend-vue
     call npm install
     if %errorlevel% neq 0 (
-        echo ✗ Node.js 依赖安装失败
+        echo ✗ Vue 前端依赖安装失败
         pause
         exit /b 1
     )
+    cd /d "%~dp0\.."
 )
-echo ✓ Node.js 依赖已就绪
+echo ✓ Vue 前端依赖已就绪
 
 :: ==================== 构建前端 ====================
 echo.
-echo [4/6] 构建 Next.js 前端...
-cd /d "%~dp0"
-
-:: 备份原始 next.config.ts
-if exist "..\next.config.ts" (
-    copy "..\next.config.ts" "..\next.config.ts.bak" >nul 2>&1
-)
-
-:: 写入构建配置
-(
-echo import type { NextConfig } from "next";
-echo const nextConfig: NextConfig = {
-echo   output: "export",
-echo   typescript: { ignoreBuildErrors: true },
-echo   reactStrictMode: false,
-echo   images: { unoptimized: true },
-echo };
-echo export default nextConfig;
-) > "..\next.config.ts"
-
-:: 构建
+echo [4/6] 构建 Vue 前端...
 cd /d "%~dp0\.."
-call npx next build
+cd frontend-vue
+call npm run build
 if %errorlevel% neq 0 (
-    echo ✗ Next.js 构建失败
-    if exist "..\next.config.ts.bak" (
-        copy "..\next.config.ts.bak" "..\next.config.ts" >nul 2>&1
-        del "..\next.config.ts.bak" >nul 2>&1
-    )
+    echo ✗ Vite 构建失败
     pause
     exit /b 1
 )
-
-:: 恢复原始配置
-if exist "..\next.config.ts.bak" (
-    copy "..\next.config.ts.bak" "..\next.config.ts" >nul 2>&1
-    del "..\next.config.ts.bak" >nul 2>&1
-)
+cd /d "%~dp0"
 
 :: 复制构建输出
-cd /d "%~dp0"
 if exist frontend-build rmdir /s /q frontend-build
-xcopy "..\out" "frontend-build\" /E /I /Q >nul 2>&1
+xcopy "..\frontend-vue\dist" "frontend-build\" /E /I /Q >nul 2>&1
 echo ✓ 前端构建完成
 
 :: ==================== 检查图标 ====================
 echo.
 echo [5/6] 检查应用图标...
-if exist "assets\icon.ico" (
-    echo ✓ 使用已有图标: assets\icon.ico
+if exist "assets\logo.png" (
+    echo ✓ 使用已有图标: assets\logo.png
 ) else (
-    echo ✗ 未找到 assets\icon.ico，请先将图标文件放入 assets\ 目录
+    echo ✗ 未找到 assets\logo.png，请先将图标文件放入 assets\ 目录
     pause
     exit /b 1
 )

@@ -66,8 +66,9 @@ a = Analysis(
     datas=[
         # 静态前端文件（index.html, _next/, public/）
         (FRONTEND_BUILD, 'static'),
-        # 应用图标（托盘图标运行时加载）
+        # 应用图标（托盘图标、桌面快捷方式）
         (os.path.join(BACKEND_DIR, 'assets', 'icon.ico'), 'assets'),
+        (os.path.join(BACKEND_DIR, 'assets', 'logo.png'), 'assets'),
         # 大华 NetSDK 整个目录（含 py 文件 + Libs/win64/*.dll）
         # 必须整体放入 datas 保持目录结构，SDK_Struct.py 用 __file__ 拼路径加载 DLL
         (NETSDK_DIR, 'NetSDK'),

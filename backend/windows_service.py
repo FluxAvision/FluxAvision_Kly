@@ -24,18 +24,15 @@ IS_FROZEN = getattr(sys, 'frozen', False)
 
 def _get_icon_path() -> str:
     """
-    获取 icon.ico 的运行时路径。
-    PyInstaller onedir 打包后，datas 文件解包到 sys._MEIPASS 目录下，
-    不是 _internal/，必须用 sys._MEIPASS 才能正确定位。
+    获取 logo.png 的运行时路径（用于桌面快捷方式图标）。
+    注意：Windows 快捷方式图标需要 .ico 格式，所以这里返回 .ico 文件路径。
     """
     if IS_FROZEN:
-        # sys._MEIPASS 是 PyInstaller 解包临时目录（onedir 模式即 _internal/）
         meipass = getattr(sys, '_MEIPASS', None)
         if meipass:
             p = os.path.join(meipass, 'assets', 'icon.ico')
             if os.path.isfile(p):
                 return p
-        # 兜底：exe 同级 assets/
         p = os.path.join(os.path.dirname(sys.executable), 'assets', 'icon.ico')
         if os.path.isfile(p):
             return p
@@ -79,16 +76,32 @@ def setup_windows_tray(app_port: int):
 def _get_tray_image():
     """
     加载托盘图标图片。
-    优先从 icon.ico 加载，失败时代码绘制兜底。
+    优先从 assets/icon.ico 加载，失败则尝试 logo.png，最后代码绘制兜底。
     """
     from PIL import Image, ImageDraw
-    icon_path = _get_icon_path()
-    if icon_path:
-        try:
-            return Image.open(icon_path).convert('RGBA')
-        except Exception:
-            pass
+
+    icon_paths = []
+
+    # 优先使用 .ico 文件
+    if IS_FROZEN:
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass:
+            icon_paths.append(os.path.join(meipass, 'assets', 'icon.ico'))
+        icon_paths.append(os.path.join(os.path.dirname(sys.executable), 'assets', 'icon.ico'))
+    else:
+        icon_paths.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'icon.ico'))
+
+    # 尝试加载图标文件
+    for icon_path in icon_paths:
+        if os.path.isfile(icon_path):
+            try:
+                print(f"[Tray] 加载图标: {icon_path}")
+                return Image.open(icon_path).convert('RGBA')
+            except Exception as e:
+                print(f"[Tray] 加载图标失败: {e}")
+
     # 兜底：代码绘制
+    print("[Tray] 使用代码绘制图标")
     image = Image.new('RGBA', (64, 64), (0, 217, 255, 255))
     dc = ImageDraw.Draw(image)
     dc.rectangle([15, 10, 25, 54], fill=(10, 25, 47, 255))
@@ -102,7 +115,12 @@ def _create_tray_pystray(app_port: int):
     """使用 pystray 创建带菜单的托盘图标"""
     import pystray
 
-    image = _get_tray_image()
+    try:
+        image = _get_tray_image()
+        print(f"[Tray] 图像大小: {image.size}")
+    except Exception as e:
+        print(f"[Tray] 加载图像失败: {e}")
+        raise
 
     def open_web(icon, item):
         webbrowser.open(f"http://127.0.0.1:{app_port}")
@@ -123,7 +141,9 @@ def _create_tray_pystray(app_port: int):
         pystray.MenuItem("退出", quit_app),
     )
 
+    print("[Tray] 创建托盘图标...")
     tray = pystray.Icon("FluxaVision", image, "FluxaVision 客流统计系统", menu)
+    print("[Tray] 托盘图标创建成功，开始运行...")
     tray.run()
 
 
@@ -156,34 +176,26 @@ def install_autostart():
 
 def _create_desktop_shortcut(app_port: int, icon_path: str):
     """
-    在桌面创建两个快捷方式：
-      1. FluxaVision 管理面板.lnk → cmd /c start 打开浏览器网页（最可靠）
-      2. FluxaVision.lnk          → 启动后台服务（exe）
+    在桌面创建管理面板快捷方式，双击用默认浏览器打开网页。
     """
     desktop = _get_desktop_path()
-    exe_path = os.path.abspath(sys.executable)
     url = f"http://127.0.0.1:{app_port}"
 
-    # ── 1. 网页快捷方式：目标为 cmd /c start <url>，绝对可靠 ─────────────
-    web_lnk = os.path.join(desktop, "FluxaVision 管理面板.lnk")
-    if not os.path.exists(web_lnk):
-        icon_line = f'$s.IconLocation = "{icon_path}"' if icon_path else ""
-        ps = (
-            "$ws = New-Object -ComObject WScript.Shell\n"
-            f'$s = $ws.CreateShortcut("{web_lnk}")\n'
-            '$s.TargetPath = "cmd.exe"\n'
-            f'$s.Arguments = "/c start \"\" \"{url}\"" \n'
-            "$s.WindowStyle = 7\n"
-            + (f"{icon_line}\n" if icon_line else "")
-            + '$s.Description = "打开 FluxaVision 管理面板"\n'
-            "$s.Save()"
-        )
-        _run_powershell(ps, "管理面板快捷方式")
-
-    # ── 2. 服务启动快捷方式（.lnk，启动后台 exe）────────────────────────
-    lnk_path = os.path.join(desktop, "FluxaVision.lnk")
-    if not os.path.exists(lnk_path):
-        _create_lnk(lnk_path, exe_path, icon_path)
+    # 使用 .url 文件格式，Windows 原生支持，双击自动用浏览器打开
+    web_url = os.path.join(desktop, "FluxaVision 管理面板.url")
+    if not os.path.exists(web_url):
+        try:
+            url_content = f"""[InternetShortcut]
+URL={url}
+IconIndex=0
+"""
+            if icon_path:
+                url_content += f'IconFile={icon_path}\n'
+            with open(web_url, 'w', encoding='utf-8') as f:
+                f.write(url_content)
+            print("[Shortcut] ✓ 管理面板快捷方式已创建")
+        except Exception as e:
+            print(f"[Shortcut] ✗ 管理面板快捷方式创建失败: {e}")
 
 
 def _run_powershell(ps_command: str, label: str):

@@ -187,37 +187,38 @@ def _mount_static_files():
 
     logger.info(f"挂载静态前端文件: {static_dir}")
 
-    # 挂载 public 目录中的静态资源（logo.png 等）
+    # 挂载 Vite assets/ 目录（JS/CSS/字体等）
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="vite_assets")
+
+    # 挂载 public 子目录（如果存在）
     public_dir = os.path.join(static_dir, "public") if os.path.isdir(os.path.join(static_dir, "public")) else None
     if public_dir:
         app.mount("/public", StaticFiles(directory=public_dir), name="public_static")
 
-    # 挂载 _next 静态资源（JS/CSS/字体等）
-    next_static_dir = os.path.join(static_dir, "_next")
-    if os.path.isdir(next_static_dir):
-        app.mount("/_next", StaticFiles(directory=next_static_dir), name="next_static")
-
-    # favicon.ico
+    # favicon.ico（Vite 将 public/ 内容复制到构建根目录，也检查 public/ 子目录）
     favicon_path = os.path.join(static_dir, "favicon.ico")
+    if not os.path.exists(favicon_path) and public_dir:
+        favicon_path = os.path.join(public_dir, "favicon.ico")
     if os.path.exists(favicon_path):
         @app.get("/favicon.ico")
         async def favicon():
             return FileResponse(favicon_path)
 
-    # logo.png
-    logo_path = None
-    logo_in_root = os.path.join(static_dir, "logo.png")
-    if os.path.exists(logo_in_root):
-        logo_path = logo_in_root
-    elif public_dir:
-        logo_in_public = os.path.join(public_dir, "logo.png")
-        if os.path.exists(logo_in_public):
-            logo_path = logo_in_public
+    # logo.png / logo.svg（检查根目录，再检查 public/ 子目录）
+    for logo_name in ["logo.png", "logo.svg"]:
+        logo_path = os.path.join(static_dir, logo_name)
+        if not os.path.exists(logo_path) and public_dir:
+            logo_path = os.path.join(public_dir, logo_name)
+        if os.path.exists(logo_path):
+            path = logo_path
 
-    if logo_path:
-        @app.get("/logo.png")
-        async def logo():
-            return FileResponse(logo_path)
+            @app.get(f"/{logo_name}")
+            async def logo_fn():
+                return FileResponse(path)
+
+            break
 
     # SPA fallback
     index_html_path = os.path.join(static_dir, "index.html")

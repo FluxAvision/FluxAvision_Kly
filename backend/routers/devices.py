@@ -56,8 +56,8 @@ async def create_device(request: Request):
     password = body.get("password", "")
     max_channels = body.get("maxChannels", 4)
 
-    if not name or not ip or not serial_number or not location:
-        return error_response("缺少必填字段: name, ip, serialNumber, location", 400)
+    if not name or not ip or not serial_number:
+        return error_response("缺少必填字段: name, ip, serialNumber", 400)
 
     rtsp_url = generate_rtsp_url(model, ip, rtsp_port, username, password)
 
