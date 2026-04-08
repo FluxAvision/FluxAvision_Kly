@@ -1,14 +1,14 @@
 ; ============================================================
-; FluxaVision 客流统计系统 - Inno Setup 安装程序脚本
+; FluxAvision 客流统计系统 - Inno Setup 安装程序脚本
 ; ============================================================
 ; 编译方式: 使用 Inno Setup Compiler 打开此文件编译
 ; 下载地址: https://jrsoftware.org/isinfo.php
 ; ============================================================
 
-#define MyAppName "FluxaVision 客流统计系统"
+#define MyAppName "FluxAvision 客流统计系统"
 #define MyAppVersion "2.1.0"
-#define MyAppPublisher "FluxaVision"
-#define MyAppURL "http://127.0.0.1:8080"
+#define MyAppPublisher "FluxAvision"
+#define MyAppURL "http://127.0.0.1:15678"
 #define MyAppExeName "FluxaVision.exe"
 #define MyAppDescription "基于AI的客流统计与分析系统"
 
@@ -21,10 +21,10 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\FluxaVision
+DefaultDirName={autopf}\FluxAvision
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer_output
-OutputBaseFilename=FluxaVision-Setup-v{#MyAppVersion}
+OutputBaseFilename=FluxAvision-Setup-v{#MyAppVersion}
 SetupIconFile=assets\icon.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -49,10 +49,9 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "快捷方式:"; Flags: checked
 Name: "quicklaunchicon"; Description: "创建快速启动栏快捷方式"; GroupDescription: "快捷方式:"; Flags: unchecked
-Name: "autostart"; Description: "开机自动启动"; GroupDescription: "启动:"; Flags: checked
-Name: "firewall"; Description: "添加防火墙规则"; GroupDescription: "网络:"; Flags: checked
+Name: "autostart"; Description: "开机自动启动"; GroupDescription: "启动:"
+Name: "firewall"; Description: "添加防火墙规则"; GroupDescription: "网络:"
 
 [Files]
 ; ==================== 打包文件 ====================
@@ -63,7 +62,6 @@ Source: "dist\FluxaVision\*"; DestDir: "{app}"; Flags: ignoreversion recursesubd
 ; ==================== 快捷方式 ====================
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
 
 [Run]
