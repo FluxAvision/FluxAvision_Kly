@@ -81,12 +81,12 @@ async def get_dashboard_data():
         total_out = sum(r.countOut for r in all_records)
 
         # ==================== 门店今日逐时趋势 (所有设备求和) ====================
-        hourly_map = defaultdict(lambda: {"hour": 0, "countIn": 0, "countOut": 0})
+        # 初始化完整的24小时数据，没有数据的小时用0补全
+        hourly_today = [{"hour": h, "countIn": 0, "countOut": 0} for h in range(24)]
         for r in today_records:
-            hourly_map[r.hour]["hour"] = r.hour
-            hourly_map[r.hour]["countIn"] += r.countIn
-            hourly_map[r.hour]["countOut"] += r.countOut
-        hourly_today = [hourly_map[h] for h in range(24)]
+            if 0 <= r.hour < 24:
+                hourly_today[r.hour]["countIn"] += r.countIn
+                hourly_today[r.hour]["countOut"] += r.countOut
 
         # 今日高峰时段
         peak_hour_entry = max(hourly_today, key=lambda x: x["countIn"])

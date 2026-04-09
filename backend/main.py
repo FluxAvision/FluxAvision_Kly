@@ -103,9 +103,9 @@ async def lifespan(app: FastAPI):
 
 # ==================== FastAPI 应用 ====================
 app = FastAPI(
-    title="FluxaVision 客流统计系统",
+    title="FluxAvision 客流统计系统",
     description="基于 Python FastAPI + SQLite3 + AES-256 字段加密的后端API",
-    version="2.0.0",
+    version="2.1.0",
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
@@ -142,6 +142,7 @@ from routers import (
     traffic_history_router,
     traffic_dashboard_router,
     traffic_collector_router,
+    traffic_stats_router,
     settings_router,
     large_screen_router,
     large_screen_templates_router,
@@ -164,6 +165,7 @@ app.include_router(license_router)
 app.include_router(seed_router)
 app.include_router(stream_router)
 app.include_router(traffic_collector_router)
+app.include_router(traffic_stats_router)
 
 
 # ==================== 健康检查 ====================
