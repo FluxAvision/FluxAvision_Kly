@@ -4,6 +4,7 @@ from .traffic import router as traffic_router
 from .traffic_history import router as traffic_history_router
 from .traffic_dashboard import router as traffic_dashboard_router
 from .traffic_collector import router as traffic_collector_router
+from .traffic_stats import router as traffic_stats_router
 from .settings import router as settings_router
 from .large_screen import router as large_screen_router
 from .large_screen_templates import router as large_screen_templates_router

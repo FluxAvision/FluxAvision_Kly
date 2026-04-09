@@ -58,7 +58,7 @@ def get_engine():
 
 
 def _migrate_database(engine):
-    """数据库迁移: 为已有表添加新字段"""
+    """数据库迁移: 为已有表添加新字段和表"""
     from sqlalchemy import text, inspect
     inspector = inspect(engine)
     with engine.connect() as conn:
@@ -103,11 +103,69 @@ def _migrate_database(engine):
             if col_name not in template_cols:
                 migrations.append(f"ALTER TABLE screen_templates ADD COLUMN {col_name} {col_def}")
 
+        # 客流统计新表迁移
+        new_tables = [
+            ("traffic_hourly", """
+                CREATE TABLE IF NOT EXISTS traffic_hourly (
+                    id TEXT PRIMARY KEY,
+                    deviceId TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    hour INTEGER NOT NULL,
+                    countIn INTEGER DEFAULT 0,
+                    countOut INTEGER DEFAULT 0,
+                    countInUnique INTEGER DEFAULT 0,
+                    countOutUnique INTEGER DEFAULT 0,
+                    insideCount INTEGER DEFAULT 0,
+                    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """),
+            ("traffic_daily", """
+                CREATE TABLE IF NOT EXISTS traffic_daily (
+                    id TEXT PRIMARY KEY,
+                    deviceId TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    countIn INTEGER DEFAULT 0,
+                    countOut INTEGER DEFAULT 0,
+                    countInUnique INTEGER DEFAULT 0,
+                    countOutUnique INTEGER DEFAULT 0,
+                    insideMax INTEGER DEFAULT 0,
+                    insideMin INTEGER DEFAULT 0,
+                    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """),
+            ("traffic_cumulative", """
+                CREATE TABLE IF NOT EXISTS traffic_cumulative (
+                    id TEXT PRIMARY KEY,
+                    deviceId TEXT NOT NULL UNIQUE,
+                    totalIn INTEGER DEFAULT 0,
+                    totalOut INTEGER DEFAULT 0,
+                    currentInside INTEGER DEFAULT 0,
+                    lastResetAt DATETIME,
+                    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """),
+        ]
+        for table_name, create_sql in new_tables:
+            if not inspector.has_table(table_name):
+                migrations.append(create_sql)
+                # 创建索引
+                if table_name == "traffic_hourly":
+                    migrations.append(
+                        "CREATE INDEX IF NOT EXISTS idx_hourly_device_date_hour ON traffic_hourly(deviceId, date, hour)"
+                    )
+                elif table_name == "traffic_daily":
+                    migrations.append(
+                        "CREATE INDEX IF NOT EXISTS idx_daily_device_date ON traffic_daily(deviceId, date)"
+                    )
+
         for sql in migrations:
             try:
                 conn.execute(text(sql))
                 conn.commit()
-                logger.info(f"  迁移: {sql}")
+                logger.info(f"  迁移: {sql[:80]}...")
             except Exception as e:
                 logger.warning(f"  迁移跳过 (可能已存在): {e}")
 

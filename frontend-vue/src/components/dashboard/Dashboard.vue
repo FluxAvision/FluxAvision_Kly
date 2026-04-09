@@ -99,9 +99,11 @@ async function fetchData() {
     if (res.ok) {
       const json = await res.json()
       const apiData: DashboardApiData = json.data || json
+      console.log('[Dashboard] hourlyToday data:', apiData.hourlyToday?.slice(0, 5))
       data.value = apiData
     }
-  } catch {
+  } catch (e) {
+    console.error('[Dashboard] fetch error:', e)
     // Keep null
   } finally {
     loading.value = false
@@ -127,12 +129,14 @@ const customLabels = computed(() => {
 function getLabel(key: string): string {
   return customLabels.value[key] || metricConfig[key]?.label || key
 }
-const hourlyData = computed(() =>
-  (data.value?.hourlyToday || defaultHourlyData).map(h => ({
-    ...h,
-    hour: `${String(h.hour).padStart(2, '0')}:00`,
-  })),
-)
+const hourlyData = computed(() => {
+  const source = data.value?.hourlyToday || defaultHourlyData
+  return source.map((h, index) => ({
+    hour: `${String(h.hour ?? index).padStart(2, '0')}:00`,
+    countIn: h.countIn ?? 0,
+    countOut: h.countOut ?? 0,
+  }))
+})
 const devices = computed(() => data.value?.devices || [])
 const devicesToday = computed(() => data.value?.devicesToday || [])
 const peakHour = computed(() => data.value?.peakHour)
@@ -178,7 +182,12 @@ const hourlyChartOption = computed(() => ({
     data: hourlyData.value.map(h => h.hour),
     axisLine: { lineStyle: { color: '#8892a0' } },
     axisTick: { show: false },
-    axisLabel: { color: '#8892a0', fontSize: 12, interval: 2 },
+    axisLabel: {
+      color: '#8892a0',
+      fontSize: 11,
+      interval: 0,
+      rotate: 45,
+    },
     boundaryGap: false,
   },
   yAxis: {
