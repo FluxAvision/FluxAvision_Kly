@@ -149,6 +149,7 @@ class SystemSettings(Base):
     storeName       = Column(String(100), default="我的门店", comment="门店名称")
     storeLogo       = Column(String(500), default="", comment="门店Logo路径")
     loginPassword   = Column(EncryptedString, default="", comment="登录密码(加密)")
+    storeMaxCapacity = Column(Integer, default=0, comment="门店最大承载人数")
     dashboardMetrics = Column(String(200), default="todayIn,todayOut,currentIn,weekIn", comment="仪表盘显示指标")
     dashboardMetricsLabels = Column(Text, default="", comment="指标自定义标签(JSON)")
     createdAt       = Column(DateTime, default=_utcnow)

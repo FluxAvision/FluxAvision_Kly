@@ -21,6 +21,7 @@ const settings = ref({
   storeName: '我的门店',
   storeLogo: '',
   loginPassword: '',
+  storeMaxCapacity: '',
   dashboardMetrics: ['todayIn', 'todayOut', 'currentIn', 'weekIn'],
 })
 
@@ -28,7 +29,7 @@ const metricLabels = ref<Record<string, string>>({})
 
 function getMetricLabel(key: string): string {
   if (metricLabels.value[key]) return metricLabels.value[key]
-  const opt = metricOptions.find(o => o.key === key)
+  const opt = metricOptions.find((o) => o.key === key)
   return opt ? opt.label : key
 }
 
@@ -46,6 +47,9 @@ async function fetchSettings() {
       if (data.storeName) settings.value.storeName = data.storeName
       if (data.storeLogo) settings.value.storeLogo = data.storeLogo
       if (data.loginPassword) settings.value.loginPassword = data.loginPassword
+      if (data.storeMaxCapacity !== undefined && data.storeMaxCapacity !== null) {
+        settings.value.storeMaxCapacity = String(data.storeMaxCapacity)
+      }
       if (data.dashboardMetrics) {
         settings.value.dashboardMetrics = data.dashboardMetrics.split(',').filter(Boolean)
       }
@@ -91,12 +95,14 @@ function handleMetricToggle(key: string) {
 async function handleSave() {
   saving.value = true
   try {
-    const body: Record<string, string> = {
+    const body: Record<string, string | number> = {
       storeName: settings.value.storeName,
       storeLogo: settings.value.storeLogo,
+      storeMaxCapacity: settings.value.storeMaxCapacity ? Number(settings.value.storeMaxCapacity) : 0,
       dashboardMetrics: settings.value.dashboardMetrics.join(','),
       dashboardMetricsLabels: JSON.stringify(metricLabels.value),
     }
+
     if (newPassword.value) {
       body.loginPassword = newPassword.value
     }
@@ -134,65 +140,75 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <!-- Header -->
     <div>
-      <h2 class="text-2xl font-bold text-white">系统设置 <span class="text-sm font-normal text-[#8892a0] ml-2">管理系统基本配置和仪表盘显示</span></h2>
+      <h2 class="text-2xl font-bold text-white">
+        系统设置
+        <span class="ml-2 text-sm font-normal text-[#8892a0]">管理系统基础配置和仪表盘显示</span>
+      </h2>
     </div>
 
-    <!-- Loading skeleton -->
     <div v-if="loading" class="space-y-6">
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
-        <div class="h-6 w-40 bg-[#1e293b] rounded animate-pulse" />
-        <div class="h-10 w-full bg-[#1e293b] rounded animate-pulse" />
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
+        <div class="h-6 w-40 animate-pulse rounded bg-[#1e293b]" />
+        <div class="h-10 w-full animate-pulse rounded bg-[#1e293b]" />
       </div>
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
-        <div class="h-6 w-40 bg-[#1e293b] rounded animate-pulse" />
-        <div class="h-10 w-full bg-[#1e293b] rounded animate-pulse" />
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
+        <div class="h-6 w-40 animate-pulse rounded bg-[#1e293b]" />
+        <div class="h-10 w-full animate-pulse rounded bg-[#1e293b]" />
       </div>
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
-        <div class="h-6 w-40 bg-[#1e293b] rounded animate-pulse" />
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
+        <div class="h-6 w-40 animate-pulse rounded bg-[#1e293b]" />
         <div class="grid grid-cols-2 gap-4">
-          <div v-for="i in 4" :key="i" class="h-20 bg-[#1e293b] rounded animate-pulse" />
+          <div v-for="i in 4" :key="i" class="h-20 animate-pulse rounded bg-[#1e293b]" />
         </div>
       </div>
     </div>
 
-    <!-- Settings content -->
     <div v-else class="space-y-6">
-      <!-- Store Info -->
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
         <h3 class="text-lg font-medium text-white">门店信息</h3>
 
         <div class="flex items-center gap-4">
-          <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">门店名称</label>
+          <label class="w-24 flex-shrink-0 text-right text-sm text-[#8892a0]">门店名称</label>
           <input
             v-model="settings.storeName"
             type="text"
-            class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+            class="flex-1 rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-[#00d9ff]"
             placeholder="请输入门店名称"
           />
         </div>
 
         <div class="flex items-center gap-4">
-          <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">门店Logo</label>
-          <div class="flex items-center gap-3 flex-1">
-            <div
-              class="w-10 h-10 rounded-lg bg-[#0a192f] border border-[#1e293b] flex items-center justify-center overflow-hidden"
-            >
+          <label class="w-24 flex-shrink-0 text-right text-sm text-[#8892a0]">最大承载人数</label>
+          <input
+            v-model="settings.storeMaxCapacity"
+            type="number"
+            min="0"
+            class="flex-1 rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-[#00d9ff]"
+            placeholder="请输入门店最大承载人数"
+          />
+        </div>
+
+        <div class="flex items-center gap-4">
+          <label class="w-24 flex-shrink-0 text-right text-sm text-[#8892a0]">门店 Logo</label>
+          <div class="flex flex-1 items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-[#1e293b] bg-[#0a192f]">
               <img
                 v-if="settings.storeLogo"
                 :src="settings.storeLogo"
                 alt="Logo"
-                class="w-full h-full object-cover"
+                class="h-full w-full object-cover"
               />
-              <ImageIcon v-else class="w-5 h-5 text-[#8892a0]" />
+              <ImageIcon v-else class="h-5 w-5 text-[#8892a0]" />
             </div>
             <button
-              class="flex items-center gap-2 px-3 py-2 bg-[#0a192f] border border-[#1e293b] rounded-md text-sm text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer"
+              class="cursor-pointer rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-2 text-sm text-[#8892a0] transition-colors hover:border-[#00d9ff]/50 hover:text-white"
               @click="fileInputRef?.click()"
             >
-              <Upload class="w-4 h-4" />
-              上传Logo
+              <span class="flex items-center gap-2">
+                <Upload class="h-4 w-4" />
+                上传 Logo
+              </span>
             </button>
             <input
               ref="fileInputRef"
@@ -205,41 +221,41 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Password -->
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
         <h3 class="text-lg font-medium text-white">登录密码</h3>
         <div class="flex items-start gap-4">
-          <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right mt-2">新密码</label>
+          <label class="mt-2 w-24 flex-shrink-0 text-right text-sm text-[#8892a0]">新密码</label>
           <div class="flex-1">
             <input
               v-model="newPassword"
               type="password"
-              class="w-full bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+              class="w-full rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-[#00d9ff]"
               placeholder="留空则不修改密码"
             />
-            <p class="text-xs text-[#8892a0]/60 mt-1">修改后下次登录需要使用新密码</p>
+            <p class="mt-1 text-xs text-[#8892a0]/60">修改后下次登录需要使用新密码</p>
           </div>
         </div>
       </div>
 
-      <!-- Dashboard Metrics -->
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
             <h3 class="text-lg font-medium text-white">数据指标</h3>
-            <span class="text-sm text-[#8892a0]">选择要在仪表盘上显示的客流指标（最多 {{ MAX_METRICS }} 个），已选 {{ settings.dashboardMetrics.length }}/{{ MAX_METRICS }}</span>
+            <span class="text-sm text-[#8892a0]">
+              选择要在仪表盘上显示的客流指标，最多 {{ MAX_METRICS }} 个，已选 {{ settings.dashboardMetrics.length }}/{{ MAX_METRICS }}
+            </span>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           <div
             v-for="opt in metricOptions"
             :key="opt.key"
-            class="flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer"
+            class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors"
             :class="[
               settings.dashboardMetrics.includes(opt.key)
                 ? 'border-[#00d9ff]/30 bg-[#00d9ff]/5'
-                : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/20'
+                : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/20',
             ]"
             @click="handleMetricToggle(opt.key)"
           >
@@ -248,45 +264,46 @@ onMounted(() => {
               :checked="settings.dashboardMetrics.includes(opt.key)"
               :disabled="!settings.dashboardMetrics.includes(opt.key) && settings.dashboardMetrics.length >= MAX_METRICS"
               @change="handleMetricToggle(opt.key)"
-              class="w-4 h-4 rounded border-[#2d4765] accent-[#00d9ff]"
+              class="h-4 w-4 rounded border-[#2d4765] accent-[#00d9ff]"
             />
             <span class="text-sm" :class="settings.dashboardMetrics.includes(opt.key) ? 'text-[#00d9ff]' : 'text-[#8892a0]'">
               {{ opt.label }}
             </span>
           </div>
         </div>
-
       </div>
 
-      <!-- 自定义指标名称 -->
-      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
+      <div class="space-y-4 rounded-xl border border-[#1e293b] bg-[#112240] p-6">
         <h3 class="text-lg font-medium text-white">自定义指标名称</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           <div
             v-for="opt in metricOptions"
             :key="opt.key"
             class="flex items-center gap-3"
           >
-            <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">{{ opt.label }}</label>
+            <label class="w-20 flex-shrink-0 text-right text-sm text-[#8892a0]">{{ getMetricLabel(opt.key) }}</label>
             <input
               :value="metricLabels[opt.key] || ''"
               type="text"
-              class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-1.5 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+              class="flex-1 rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-1.5 text-sm text-white outline-none transition-colors focus:border-[#00d9ff]"
               :placeholder="opt.label"
               @input="metricLabels[opt.key] = ($event.target as HTMLInputElement).value"
             />
           </div>
         </div>
       </div>
+
       <div class="flex justify-center pt-4">
         <button
           :disabled="saving"
-          class="flex items-center gap-2 px-4 py-2 bg-[#00d9ff] text-[#0a192f] rounded-md text-sm font-medium hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          class="cursor-pointer rounded-md bg-[#00d9ff] px-4 py-2 text-sm font-medium text-[#0a192f] transition-colors hover:bg-[#00d9ff]/80 disabled:cursor-not-allowed disabled:opacity-50"
           @click="handleSave"
         >
-          <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
-          <Save v-else class="w-4 h-4" />
-          保存设置
+          <span class="flex items-center gap-2">
+            <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
+            <Save v-else class="h-4 w-4" />
+            保存设置
+          </span>
         </button>
       </div>
     </div>
