@@ -84,6 +84,8 @@ def _migrate_database(engine):
             migrations.append("ALTER TABLE system_settings ADD COLUMN dashboardMetricsLabels TEXT DEFAULT ''")
         if "storeMaxCapacity" not in settings_cols:
             migrations.append("ALTER TABLE system_settings ADD COLUMN storeMaxCapacity INTEGER DEFAULT 0")
+        if "instantaneousMaxCapacity" not in settings_cols:
+            migrations.append("ALTER TABLE system_settings ADD COLUMN instantaneousMaxCapacity INTEGER DEFAULT 0")
 
         # screen_templates 表迁移
         try:

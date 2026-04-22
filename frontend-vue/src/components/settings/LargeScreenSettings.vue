@@ -48,13 +48,14 @@ const DEFAULT_CONFIG: LargeScreenConfig = {
   templateId: '',
 }
 
-const MAX_SCREEN_METRICS = 4
-const MAX_SCREEN_DEVICES = 4
+const MAX_SCREEN_METRICS = 8
+const MAX_SCREEN_DEVICES = 8
 
 // 内置模板
 const builtinTemplates = [
   { id: 'tpl-general', name: '通用模板', color: '#4a9eff', desc: '居中层级布局，大数字计数器 + 分栏指标卡片', isBuiltin: true },
   { id: 'tpl-minimal', name: '简约模板', color: '#3b82f6', desc: '网格结构布局，中心面板 + 四角指标面板', isBuiltin: true },
+  { id: 'tpl-standard', name: '标准模板', color: '#ef4444', desc: '欢迎大字标题 + 累计来访数字翻牌 + 当日、本月、全年统计', isBuiltin: true },
 ]
 
 const metricOptions = [
@@ -65,8 +66,13 @@ const metricOptions = [
   { key: 'weekOut', label: '本周出' },
   { key: 'monthIn', label: '本月进' },
   { key: 'monthOut', label: '本月出' },
+  { key: 'yearIn', label: '本年进' },
+  { key: 'yearOut', label: '本年出' },
   { key: 'totalIn', label: '累计进' },
   { key: 'totalOut', label: '累计出' },
+  { key: 'instantaneousMaxCapacity', label: '瞬时可承载人数' },
+  { key: 'storeMaxCapacity', label: '最大可承载人数' },
+  { key: 'availableCapacity', label: '可接待人数' },
 ]
 
 const activeTab = ref('general')
