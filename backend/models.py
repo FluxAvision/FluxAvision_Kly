@@ -63,7 +63,7 @@ class Device(Base):
     updatedAt    = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
-# ==================== 客流记录 ====================
+# ==================== 客流记录（原始小时增量）====================
 class TrafficRecord(Base):
     __tablename__ = "traffic_records"
 
@@ -80,6 +80,65 @@ class TrafficRecord(Base):
         Index("idx_traffic_date_hour", "date", "hour"),
         Index("idx_traffic_device_date", "deviceId", "date"),
     )
+
+
+# ==================== 每小时客流统计（含去重）====================
+class TrafficHourly(Base):
+    """每小时客流统计，包含去重后的数据"""
+    __tablename__ = "traffic_hourly"
+
+    id              = Column(String(36), primary_key=True, default=lambda: _generate_cuid())
+    deviceId        = Column(String(36), nullable=False, comment="设备ID")
+    date            = Column(String(10), nullable=False, comment="日期 YYYY-MM-DD")
+    hour            = Column(Integer, nullable=False, comment="小时 0-23")
+    countIn         = Column(Integer, default=0, comment="进入人数")
+    countOut        = Column(Integer, default=0, comment="出去人数")
+    countInUnique   = Column(Integer, default=0, comment="去重后进入人数")
+    countOutUnique  = Column(Integer, default=0, comment="去重后出去人数")
+    insideCount     = Column(Integer, default=0, comment="在场人数")
+    createdAt       = Column(DateTime, default=_utcnow)
+    updatedAt       = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index("idx_hourly_device_date_hour", "deviceId", "date", "hour", unique=True),
+    )
+
+
+# ==================== 每日客流统计（含去重）====================
+class TrafficDaily(Base):
+    """每日客流统计，包含去重后的数据"""
+    __tablename__ = "traffic_daily"
+
+    id              = Column(String(36), primary_key=True, default=lambda: _generate_cuid())
+    deviceId        = Column(String(36), nullable=False, comment="设备ID")
+    date            = Column(String(10), nullable=False, comment="日期 YYYY-MM-DD")
+    countIn         = Column(Integer, default=0, comment="进入人数")
+    countOut        = Column(Integer, default=0, comment="出去人数")
+    countInUnique   = Column(Integer, default=0, comment="去重后进入人数")
+    countOutUnique  = Column(Integer, default=0, comment="去重后出去人数")
+    insideMax       = Column(Integer, default=0, comment="当日最大在场人数")
+    insideMin       = Column(Integer, default=0, comment="当日最小在场人数")
+    createdAt       = Column(DateTime, default=_utcnow)
+    updatedAt       = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index("idx_daily_device_date", "deviceId", "date", unique=True),
+    )
+
+
+# ==================== 累计客流统计 ====================
+class TrafficCumulative(Base):
+    """累计客流统计，从设备启动或重置开始计算"""
+    __tablename__ = "traffic_cumulative"
+
+    id              = Column(String(36), primary_key=True, default=lambda: _generate_cuid())
+    deviceId        = Column(String(36), nullable=False, unique=True, comment="设备ID")
+    totalIn         = Column(Integer, default=0, comment="累计进入人数")
+    totalOut        = Column(Integer, default=0, comment="累计出去人数")
+    currentInside   = Column(Integer, default=0, comment="当前在场人数")
+    lastResetAt     = Column(DateTime, nullable=True, comment="上次重置时间")
+    createdAt       = Column(DateTime, default=_utcnow)
+    updatedAt       = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # ==================== 系统设置 ====================
