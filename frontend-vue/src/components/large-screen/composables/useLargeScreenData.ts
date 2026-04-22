@@ -33,8 +33,13 @@ export const metricMap: Record<string, { label: string; icon: any; color: string
   weekOut: { label: '本周出', icon: markRaw(TrendingDown), color: '#a855f7' },
   monthIn: { label: '本月进', icon: markRaw(CalendarDays), color: '#f43f5e' },
   monthOut: { label: '本月出', icon: markRaw(CalendarDays), color: '#f97316' },
+  yearIn: { label: '本年进', icon: markRaw(TrendingUp), color: '#22c55e' },
+  yearOut: { label: '本年出', icon: markRaw(TrendingDown), color: '#ef4444' },
   totalIn: { label: '累计进', icon: markRaw(Hash), color: '#06b6d4' },
   totalOut: { label: '累计出', icon: markRaw(Hash), color: '#10b981' },
+  instantaneousMaxCapacity: { label: '瞬时可承载人数', icon: markRaw(Users), color: '#f59e0b' },
+  storeMaxCapacity: { label: '最大可承载人数', icon: markRaw(Hash), color: '#8b5cf6' },
+  availableCapacity: { label: '可接待人数', icon: markRaw(Users), color: '#14b8a6' },
 }
 
 export function useLargeScreenData() {
@@ -52,7 +57,8 @@ export function useLargeScreenData() {
 
   const metrics = ref<Record<string, number>>({
     todayIn: 0, todayOut: 0, currentIn: 0, weekIn: 0, weekOut: 0,
-    monthIn: 0, monthOut: 0, totalIn: 0, totalOut: 0,
+    monthIn: 0, monthOut: 0, yearIn: 0, yearOut: 0,
+    totalIn: 0, totalOut: 0, instantaneousMaxCapacity: 0, storeMaxCapacity: 0, availableCapacity: 0,
   })
 
   function getLabel(key: string): string {
@@ -114,8 +120,13 @@ export function useLargeScreenData() {
           weekOut: st.weekOut || dashData.weekOut || 0,
           monthIn: st.monthIn || dashData.monthIn || 0,
           monthOut: st.monthOut || dashData.monthOut || 0,
+          yearIn: st.yearIn || dashData.yearIn || 0,
+          yearOut: st.yearOut || dashData.yearOut || 0,
           totalIn: st.totalIn || dashData.totalIn || 0,
           totalOut: st.totalOut || dashData.totalOut || 0,
+          instantaneousMaxCapacity: st.instantaneousMaxCapacity || dashData.instantaneousMaxCapacity || 0,
+          storeMaxCapacity: st.storeMaxCapacity || dashData.storeMaxCapacity || 0,
+          availableCapacity: st.availableCapacity || dashData.availableCapacity || 0,
         }
         hourlyData.value = (dashData.hourlyToday || []).map((h: any) => ({
           ...h,

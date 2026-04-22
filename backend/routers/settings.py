@@ -43,6 +43,7 @@ async def update_settings(request: Request):
                 storeLogo=body.get("storeLogo", ""),
                 loginPassword=body.get("loginPassword", ""),
                 storeMaxCapacity=int(body.get("storeMaxCapacity", 0) or 0),
+                instantaneousMaxCapacity=int(body.get("instantaneousMaxCapacity", 0) or 0),
                 dashboardMetrics=body.get("dashboardMetrics", "todayIn,todayOut,currentIn,weekIn"),
                 dashboardMetricsLabels=body.get("dashboardMetricsLabels", ""),
             )
@@ -56,6 +57,8 @@ async def update_settings(request: Request):
                 settings.loginPassword = body["loginPassword"]
             if "storeMaxCapacity" in body:
                 settings.storeMaxCapacity = int(body.get("storeMaxCapacity", 0) or 0)
+            if "instantaneousMaxCapacity" in body:
+                settings.instantaneousMaxCapacity = int(body.get("instantaneousMaxCapacity", 0) or 0)
             if "dashboardMetrics" in body:
                 settings.dashboardMetrics = body["dashboardMetrics"]
             if "dashboardMetricsLabels" in body:

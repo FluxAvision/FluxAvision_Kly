@@ -1,22 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { X, Video, Wifi, WifiOff } from 'lucide-vue-next'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
-import RTSPVideoPlayer from '@/components/video/RTSPVideoPlayer.vue'
+import { X } from 'lucide-vue-next'
 import { metricMap } from '../composables/useLargeScreenData'
-import type { HourlyData, Device, LargeScreenConfig } from '../composables/useLargeScreenData'
-
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent])
+import type { LargeScreenConfig } from '../composables/useLargeScreenData'
 
 const props = defineProps<{
   config: LargeScreenConfig
   metrics: Record<string, number>
-  hourlyData: HourlyData[]
-  devices: Device[]
+  hourlyData: { hour: string; countIn: number; countOut: number }[]
+  devices: { id: string; name: string; ip: string; status: string }[]
   storeLogo: string
   loading: boolean
   clockTime: string
@@ -25,240 +17,308 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
-// 人物图标映射
-const personIcons: Record<string, number> = {
-  todayIn: 1, todayOut: 1,
-  currentIn: 2, weekIn: 2, weekOut: 2,
-  monthIn: 3, monthOut: 3, totalIn: 3, totalOut: 3,
-}
-
-const totalInDigits = computed(() => {
-  const val = String(props.metrics.totalIn || 0).padStart(8, '0')
-  return val.split('')
-})
-
-const generalCards = computed(() =>
-  props.config.metrics.slice(0, 3).map(key => ({
-    key,
-    label: props.getLabel(key),
-    value: props.metrics[key] || 0,
-    color: metricMap[key]?.color || '#00d9ff',
-    personCount: personIcons[key] || 1,
-  }))
-)
-
-const lineChartOption = computed(() => ({
-  tooltip: {
-    backgroundColor: 'rgba(23, 42, 69, 0.9)',
-    borderColor: '#1e293b',
-    borderRadius: 8,
-    textStyle: { color: '#ffffff' },
+const leftCards = computed(() => ([
+  {
+    key: 'todayIn',
+    label: '进',
+    value: props.metrics.todayIn || 0,
+    color: metricMap.todayIn?.color || '#00d9ff',
   },
-  grid: { left: 40, right: 20, top: 10, bottom: 30 },
-  xAxis: {
-    type: 'category',
-    data: props.hourlyData.map(h => h.hour),
-    axisLine: { lineStyle: { color: '#1e293b' } },
-    axisLabel: { color: '#8892a0', fontSize: 10 },
-    interval: 3,
+  {
+    key: 'todayOut',
+    label: '出',
+    value: props.metrics.todayOut || 0,
+    color: metricMap.todayOut?.color || '#00ff88',
   },
-  yAxis: {
-    type: 'value',
-    axisLine: { lineStyle: { color: '#1e293b' } },
-    axisLabel: { color: '#8892a0', fontSize: 10 },
-    splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+]))
+
+const rightCards = computed(() => ([
+  {
+    key: 'instantaneousMaxCapacity',
+    label: '瞬时最大承载人数',
+    value: props.metrics.instantaneousMaxCapacity || 0,
+    color: metricMap.instantaneousMaxCapacity?.color || '#f59e0b',
   },
-  series: [
-    {
-      type: 'line',
-      smooth: true,
-      symbol: 'none',
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0.05, color: 'rgba(0, 217, 255, 0.3)' },
-            { offset: 0.95, color: 'rgba(0, 217, 255, 0)' },
-          ],
-        },
-      },
-      lineStyle: { color: '#00d9ff', width: 2 },
-      itemStyle: { color: '#00d9ff' },
-      data: props.hourlyData.map(h => h.countIn),
-    },
-    {
-      type: 'line',
-      smooth: true,
-      symbol: 'none',
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0.05, color: 'rgba(0, 255, 136, 0.3)' },
-            { offset: 0.95, color: 'rgba(0, 255, 136, 0)' },
-          ],
-        },
-      },
-      lineStyle: { color: '#00ff88', width: 2 },
-      itemStyle: { color: '#00ff88' },
-      data: props.hourlyData.map(h => h.countOut),
-    },
-  ],
+  {
+    key: 'storeMaxCapacity',
+    label: '最大承载人数',
+    value: props.metrics.storeMaxCapacity || 0,
+    color: metricMap.storeMaxCapacity?.color || '#8b5cf6',
+  },
+]))
+
+const centerCard = computed(() => ({
+  key: 'currentIn',
+  label: '当前在场人数',
+  value: props.metrics.currentIn || 0,
+  color: metricMap.currentIn?.color || '#4a9eff',
 }))
+
+const fallbackTitle = '欢迎参观'
+const fallbackLogoText = '客'
+
+const timeParts = computed(() => {
+  props.clockTime
+  const now = new Date()
+  const weekDays = [
+    '星期日',
+    '星期一',
+    '星期二',
+    '星期三',
+    '星期四',
+    '星期五',
+    '星期六',
+  ]
+  const dateText = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日`
+  const weekText = weekDays[now.getDay()]
+  const timeText = now.toLocaleTimeString('zh-CN', { hour12: false })
+  return { dateText, weekText, timeText }
+})
 </script>
 
 <template>
-  <div class="relative z-10 h-full flex flex-col px-6 py-4">
-    <!-- 装饰点阵背景 -->
-    <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <div class="absolute bottom-0 right-0 w-2/3 h-1/3" style="background-image: radial-gradient(circle, rgba(74,158,255,0.15) 1px, transparent 1px); background-size: 24px 24px;" />
-      <div class="absolute top-0 left-0 w-1/3 h-1/4" style="background-image: radial-gradient(circle, rgba(74,158,255,0.08) 1px, transparent 1px); background-size: 24px 24px;" />
-    </div>
+  <div class="general-template relative z-10 h-full w-full overflow-hidden">
+    <div class="general-template__overlay absolute inset-0" />
 
-    <!-- 顶栏 -->
-    <div class="relative z-10 w-full flex items-center justify-between mb-4 flex-shrink-0">
-      <div class="flex items-center gap-3">
-        <img v-if="storeLogo" :src="storeLogo" alt="Logo" class="h-10 w-10 object-contain" />
-        <div>
-          <h1 class="text-xl font-bold text-white glow-text-cyan">{{ config.title }}</h1>
-          <p class="text-xs text-[#8892a0]">{{ config.subtitle }}</p>
+    <div class="relative z-10 flex h-full flex-col px-10 py-8">
+      <div class="flex items-start justify-between">
+        <div class="flex items-center gap-4">
+          <div v-if="storeLogo" class="general-template__logo-shell">
+            <img :src="storeLogo" alt="Logo" class="h-full w-full object-contain" />
+          </div>
+          <div v-else class="general-template__logo-shell general-template__logo-shell--placeholder">
+            <span>{{ (config.title || fallbackLogoText).slice(0, 1) }}</span>
+          </div>
         </div>
-      </div>
-      <div class="flex items-center gap-4">
-        <span class="text-[28px] text-[#d1d5db] font-mono">{{ clockTime }}</span>
+
         <button
-          class="w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+          class="general-template__close"
           @click="emit('close')"
         >
-          <X class="w-5 h-5" />
+          <X class="h-5 w-5" />
         </button>
       </div>
-    </div>
 
-    <!-- 主体内容 -->
-    <div class="relative z-10 w-full flex-1 flex flex-col min-h-0">
-      <!-- 上半区：胶囊 + 计数器 + 卡片 -->
-      <div class="flex-shrink-0 flex flex-col items-center mb-4">
-        <!-- 胶囊标题 -->
-        <div class="mb-4 px-6 py-2 rounded-full" style="background: rgba(74,158,255,0.1); border: 1px solid rgba(74,158,255,0.3);">
-          <span class="text-base text-white font-medium">来访总人数</span>
-        </div>
+      <div class="flex flex-1 flex-col items-center justify-center">
+        <div class="w-full max-w-[1320px] text-center">
+          <h1 class="general-template__title">
+            {{ config.title || fallbackTitle }}
+          </h1>
+          <p v-if="config.subtitle" class="general-template__subtitle">
+            {{ config.subtitle }}
+          </p>
 
-        <!-- 8位数字计数器 -->
-        <div class="flex items-center gap-2 mb-4">
-          <div
-            v-for="(digit, idx) in totalInDigits"
-            :key="idx"
-            class="w-12 h-16 flex items-center justify-center rounded-lg text-3xl font-bold text-white"
-            style="background: rgba(10,26,58,0.8); border: 1px solid rgba(74,158,255,0.4); box-shadow: inset 0 2px 8px rgba(0,0,0,0.3), 0 0 10px rgba(74,158,255,0.1);"
-          >
-            {{ loading ? '' : digit }}
+          <div class="general-template__time-row">
+            <span>{{ timeParts.dateText }}</span>
+            <span>{{ timeParts.weekText }}</span>
+            <span>{{ timeParts.timeText }}</span>
           </div>
-        </div>
 
-        <!-- 3张指标卡片 -->
-        <div class="grid grid-cols-3 gap-4 w-full">
-          <div
-            v-for="card in generalCards"
-            :key="card.key"
-            class="rounded-xl overflow-hidden"
-            style="background: rgba(10,30,60,0.7); border: 1px solid rgba(74,158,255,0.25);"
-          >
-            <!-- 装饰箭头顶栏 -->
-            <div class="h-7 flex items-center justify-between px-3" style="background: linear-gradient(90deg, rgba(74,158,255,0.3), rgba(74,158,255,0.1), rgba(74,158,255,0.3));">
-              <div class="flex gap-0.5">
-                <span class="text-white/50 text-xs">&gt;&gt;&gt;</span>
-              </div>
-              <span class="text-lg text-white/70 font-medium">{{ card.label }}</span>
-              <div class="flex gap-0.5">
-                <span class="text-white/50 text-xs">&lt;&lt;&lt;</span>
+          <div class="general-template__metrics-grid">
+            <div class="general-template__stack">
+              <div
+                v-for="card in leftCards"
+                :key="card.key"
+                class="general-template__mini-card"
+              >
+                <div class="general-template__mini-label">{{ card.label }}</div>
+                <div class="general-template__mini-value" :style="{ color: card.color }">
+                  {{ loading ? '--' : card.value.toLocaleString() }}
+                </div>
               </div>
             </div>
-            <!-- 内容 -->
-            <div class="flex flex-col items-center py-4">
-              <!-- 人物图标 -->
-              <svg class="w-10 h-10 mb-2 text-white/70" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="3" />
-                <path v-if="card.personCount === 1" d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" fill="none" stroke="currentColor" stroke-width="1.5" />
-                <g v-else-if="card.personCount === 2">
-                  <path d="M4 21v-2a3 3 0 0 1 3-3h0" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="7" cy="7" r="2.5" />
-                  <path d="M20 21v-2a3 3 0 0 0-3-3h0" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="17" cy="7" r="2.5" />
-                </g>
-                <g v-else>
-                  <path d="M3 21v-2a3 3 0 0 1 3-3h0" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="6" cy="7" r="2" />
-                  <circle cx="12" cy="5" r="2.5" />
-                  <path d="M9 21v-2a3 3 0 0 1 3-3h0" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M21 21v-2a3 3 0 0 0-3-3h0" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="18" cy="7" r="2" />
-                </g>
-              </svg>
-              <p class="text-4xl font-bold text-white">{{ loading ? '...' : card.value.toLocaleString() }}</p>
-              <p class="text-sm text-white/50 mt-1">人</p>
+
+            <div class="general-template__center-card">
+              <div class="general-template__center-label">{{ centerCard.label }}</div>
+              <div class="general-template__center-value" :style="{ color: centerCard.color }">
+                {{ loading ? '--' : centerCard.value.toLocaleString() }}
+              </div>
+            </div>
+
+            <div class="general-template__stack">
+              <div
+                v-for="card in rightCards"
+                :key="card.key"
+                class="general-template__mini-card"
+              >
+                <div class="general-template__mini-label">{{ card.label }}</div>
+                <div class="general-template__mini-value" :style="{ color: card.color }">
+                  {{ loading ? '--' : card.value.toLocaleString() }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- 视频 + 趋势图 一行（弹性填充） -->
-      <div class="flex-1 flex gap-3 w-full min-h-0">
-        <!-- 实时视频 (1/3) -->
-        <div v-if="devices.length > 0" class="w-1/3 grid gap-2" style="grid-template-rows: repeat(auto-fill, 1fr);">
-          <div
-            v-for="device in devices.slice(0, 4)"
-            :key="device.id"
-            class="bg-black/40 border border-white/10 rounded-lg overflow-hidden flex flex-col"
-          >
-            <div class="flex items-center gap-1.5 px-2 py-1 bg-black/30 flex-shrink-0">
-              <Wifi v-if="device.status === 'online'" class="w-3 h-3 text-[#00ff88]" />
-              <WifiOff v-else class="w-3 h-3 text-[#ef4444]" />
-              <span class="text-[11px] text-white truncate">{{ device.name }}</span>
-            </div>
-            <div class="flex-1 min-h-0">
-              <RTSPVideoPlayer
-                :device-id="device.id"
-                :name="device.name"
-                :status="device.status"
-                :auto-play="true"
-                :compact="true"
-                :show-controls="true"
-                class="w-full h-full"
-              />
-            </div>
-          </div>
-        </div>
-        <div v-else-if="!loading" class="w-1/3 flex items-center justify-center text-[#8892a0]">
-          <div class="text-center">
-            <Video class="w-8 h-8 mx-auto mb-1 opacity-50" />
-            <p class="text-xs">暂无视频设备</p>
-          </div>
-        </div>
-        <div v-else class="w-1/3 flex items-center justify-center text-[#8892a0] text-sm">加载中...</div>
-
-        <!-- 今日客流趋势 (2/3) -->
-        <div class="w-2/3 rounded-lg p-4 flex flex-col" style="background: rgba(10,30,60,0.5); border: 1px solid rgba(74,158,255,0.15);">
-          <h3 class="text-sm text-[#8892a0] mb-2 flex-shrink-0">今日客流趋势</h3>
-          <div class="flex-1 min-h-0">
-            <VChart v-if="!loading && hourlyData.length > 0" :option="lineChartOption" autoresize style="width: 100%; height: 100%;" />
-            <div v-else class="w-full h-full flex items-center justify-center text-[#8892a0] text-sm">
-              {{ loading ? '加载中...' : '暂无趋势数据' }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 底部装饰点阵 -->
-    <div class="relative z-10 flex-shrink-0 flex justify-center gap-3 py-2 pointer-events-none">
-      <span v-for="i in 20" :key="i" class="w-1.5 h-1.5 rounded-full" style="background: rgba(74,158,255,0.25);" />
     </div>
   </div>
 </template>
 
 <style scoped>
-.glow-text-cyan {
-  text-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
+.general-template {
+  color: #d9fbff;
+}
+
+.general-template__overlay {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.44) 0%, rgba(1, 7, 18, 0.52) 100%),
+    radial-gradient(circle at top center, rgba(98, 225, 255, 0.1) 0%, rgba(98, 225, 255, 0) 40%);
+}
+
+.general-template__logo-shell {
+  display: flex;
+  height: 84px;
+  width: 84px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(180, 247, 255, 0.34);
+  background: rgba(5, 19, 35, 0.52);
+  box-shadow: 0 0 28px rgba(92, 220, 255, 0.18), inset 0 0 18px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.general-template__logo-shell--placeholder {
+  color: #b8f6ff;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.general-template__close {
+  display: flex;
+  height: 42px;
+  width: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(180, 247, 255, 0.28);
+  background: rgba(6, 18, 34, 0.46);
+  color: #d9fbff;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.general-template__close:hover {
+  background: rgba(11, 31, 56, 0.7);
+  border-color: rgba(180, 247, 255, 0.44);
+  transform: translateY(-1px);
+}
+
+.general-template__title {
+  margin: 0;
+  font-size: clamp(2.6rem, 4.5vw, 5rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.06em;
+  color: #86eaff;
+  text-shadow: 0 0 20px rgba(96, 226, 255, 0.38);
+}
+
+.general-template__subtitle {
+  margin: 0.8rem 0 0;
+  font-size: clamp(1rem, 1.2vw, 1.25rem);
+  color: rgba(210, 249, 255, 0.82);
+  letter-spacing: 0.08em;
+}
+
+.general-template__time-row {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  color: #baf8ff;
+  font-size: clamp(1rem, 1.2vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.general-template__metrics-grid {
+  margin: 3rem auto 0;
+  display: grid;
+  width: min(100%, 1240px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.general-template__stack {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.general-template__mini-card,
+.general-template__center-card {
+  border: 1px solid rgba(150, 245, 255, 0.4);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(10, 22, 36, 0.38) 0%, rgba(6, 14, 24, 0.52) 100%);
+  box-shadow: inset 0 0 26px rgba(130, 236, 255, 0.08), 0 0 24px rgba(87, 213, 255, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+.general-template__mini-card {
+  min-height: 170px;
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.general-template__center-card {
+  min-height: 356px;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.general-template__mini-label,
+.general-template__center-label {
+  color: #c7fbff;
+  font-size: clamp(1rem, 1.1vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.general-template__mini-label {
+  margin-bottom: 1rem;
+}
+
+.general-template__center-label {
+  margin-bottom: 1.5rem;
+  font-size: clamp(1.2rem, 1.4vw, 1.6rem);
+}
+
+.general-template__mini-value {
+  font-size: clamp(2.6rem, 3vw, 3.8rem);
+  line-height: 1;
+  font-weight: 800;
+  text-shadow: 0 0 16px rgba(134, 234, 255, 0.26);
+}
+
+.general-template__center-value {
+  font-size: clamp(4rem, 6vw, 6.8rem);
+  line-height: 1;
+  font-weight: 800;
+  text-shadow: 0 0 20px rgba(134, 234, 255, 0.26);
+}
+
+@media (max-width: 900px) {
+  .general-template__logo-shell {
+    height: 64px;
+    width: 64px;
+  }
+
+  .general-template__time-row {
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .general-template__metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .general-template__center-card {
+    min-height: 220px;
+  }
 }
 </style>

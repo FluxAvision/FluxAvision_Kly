@@ -22,6 +22,7 @@ const settings = ref({
   storeLogo: '',
   loginPassword: '',
   storeMaxCapacity: '',
+  instantaneousMaxCapacity: '',
   dashboardMetrics: ['todayIn', 'todayOut', 'currentIn', 'weekIn'],
 })
 
@@ -49,6 +50,9 @@ async function fetchSettings() {
       if (data.loginPassword) settings.value.loginPassword = data.loginPassword
       if (data.storeMaxCapacity !== undefined && data.storeMaxCapacity !== null) {
         settings.value.storeMaxCapacity = String(data.storeMaxCapacity)
+      }
+      if (data.instantaneousMaxCapacity !== undefined && data.instantaneousMaxCapacity !== null) {
+        settings.value.instantaneousMaxCapacity = String(data.instantaneousMaxCapacity)
       }
       if (data.dashboardMetrics) {
         settings.value.dashboardMetrics = data.dashboardMetrics.split(',').filter(Boolean)
@@ -99,6 +103,7 @@ async function handleSave() {
       storeName: settings.value.storeName,
       storeLogo: settings.value.storeLogo,
       storeMaxCapacity: settings.value.storeMaxCapacity ? Number(settings.value.storeMaxCapacity) : 0,
+      instantaneousMaxCapacity: settings.value.instantaneousMaxCapacity ? Number(settings.value.instantaneousMaxCapacity) : 0,
       dashboardMetrics: settings.value.dashboardMetrics.join(','),
       dashboardMetricsLabels: JSON.stringify(metricLabels.value),
     }
@@ -186,6 +191,17 @@ onMounted(() => {
             min="0"
             class="flex-1 rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-[#00d9ff]"
             placeholder="请输入门店最大承载人数"
+          />
+        </div>
+
+        <div class="flex items-center gap-4">
+          <label class="w-24 flex-shrink-0 text-right text-sm text-[#8892a0]">瞬时最大承载</label>
+          <input
+            v-model="settings.instantaneousMaxCapacity"
+            type="number"
+            min="0"
+            class="flex-1 rounded-md border border-[#1e293b] bg-[#0a192f] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-[#00d9ff]"
+            placeholder="请输入瞬时最大承载人数"
           />
         </div>
 

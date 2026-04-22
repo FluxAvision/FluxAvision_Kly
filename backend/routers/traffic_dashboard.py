@@ -37,12 +37,18 @@ async def get_dashboard_data():
     monday_str = monday.strftime("%Y-%m-%d")
     first_day_of_month = today.replace(day=1)
     first_day_str = first_day_of_month.strftime("%Y-%m-%d")
+    first_day_of_year = today.replace(month=1, day=1)
+    first_day_of_year_str = first_day_of_year.strftime("%Y-%m-%d")
 
     SessionFactory = get_session_factory()
     with SessionFactory() as session:
         # 门店名称
         settings = session.query(SystemSettings).first()
         store_name = settings.storeName if settings else "我的门店"
+        store_max_capacity = settings.storeMaxCapacity if settings and settings.storeMaxCapacity else 0
+        instantaneous_max_capacity = (
+            settings.instantaneousMaxCapacity if settings and settings.instantaneousMaxCapacity else 0
+        )
 
         # ==================== 门店汇总 (所有设备求和) ====================
 
@@ -73,12 +79,22 @@ async def get_dashboard_data():
         month_in = sum(r.countIn for r in month_records)
         month_out = sum(r.countOut for r in month_records)
 
+        # 本年汇总
+        year_records = session.query(TrafficRecord).filter(
+            TrafficRecord.date >= first_day_of_year_str,
+            TrafficRecord.date <= today_str,
+            TrafficRecord.deviceId.isnot(None),
+        ).all()
+        year_in = sum(r.countIn for r in year_records)
+        year_out = sum(r.countOut for r in year_records)
+
         # 全部汇总
         all_records = session.query(TrafficRecord).filter(
             TrafficRecord.deviceId.isnot(None),
         ).all()
         total_in = sum(r.countIn for r in all_records)
         total_out = sum(r.countOut for r in all_records)
+        available_capacity = max(0, store_max_capacity - current_in)
 
         # ==================== 门店今日逐时趋势 (所有设备求和) ====================
         # 初始化完整的24小时数据，没有数据的小时用0补全
@@ -131,8 +147,13 @@ async def get_dashboard_data():
                 "weekOut": week_out,
                 "monthIn": month_in,
                 "monthOut": month_out,
+                "yearIn": year_in,
+                "yearOut": year_out,
                 "totalIn": total_in,
                 "totalOut": total_out,
+                "instantaneousMaxCapacity": instantaneous_max_capacity,
+                "storeMaxCapacity": store_max_capacity,
+                "availableCapacity": available_capacity,
             },
             # 各设备今日明细
             "devicesToday": devices_today,
