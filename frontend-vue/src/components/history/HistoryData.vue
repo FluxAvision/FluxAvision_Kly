@@ -3,24 +3,57 @@
     <!-- Toolbar -->
     <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4">
       <div class="flex items-center gap-4 flex-wrap">
-        <div class="flex items-center gap-2">
-          <label class="text-sm text-[#8892a0]">开始日期</label>
-          <a-date-picker
-            :value="startDate ? dayjs(startDate) : null"
-            @change="(_d: any, dateStr: string) => startDate = dateStr"
-            class="history-date-picker"
-            placeholder=""
-          />
+        <!-- 维度切换 -->
+        <div class="flex border border-[#1e293b] rounded-lg overflow-hidden">
+          <button
+            v-for="dim in dimensionOptions"
+            :key="dim.value"
+            @click="switchDimension(dim.value)"
+            :class="[
+              'px-3 py-2 text-xs font-medium transition-colors cursor-pointer',
+              dimension === dim.value
+                ? 'bg-[#00d9ff] text-[#0a192f]'
+                : 'bg-[#0a192f] text-[#8892a0] hover:text-white',
+            ]"
+          >
+            {{ dim.label }}
+          </button>
         </div>
-        <div class="flex items-center gap-2">
-          <label class="text-sm text-[#8892a0]">结束日期</label>
-          <a-date-picker
-            :value="endDate ? dayjs(endDate) : null"
-            @change="(_d: any, dateStr: string) => endDate = dateStr"
-            class="history-date-picker"
-            placeholder=""
-          />
-        </div>
+
+        <!-- 日期选择 -->
+        <template v-if="dimension === 'hour'">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-[#8892a0]">选择日期</label>
+            <a-date-picker
+              :value="startDate ? dayjs(startDate) : null"
+              @change="(_d: any, dateStr: string) => { startDate = dateStr; endDate = dateStr }"
+              class="history-date-picker"
+              placeholder=""
+            />
+          </div>
+        </template>
+        <template v-else>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-[#8892a0]">开始日期</label>
+            <a-date-picker
+              :value="startDate ? dayjs(startDate) : null"
+              @change="(_d: any, dateStr: string) => startDate = dateStr"
+              class="history-date-picker"
+              placeholder=""
+            />
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-[#8892a0]">结束日期</label>
+            <a-date-picker
+              :value="endDate ? dayjs(endDate) : null"
+              @change="(_d: any, dateStr: string) => endDate = dateStr"
+              class="history-date-picker"
+              placeholder=""
+            />
+          </div>
+        </template>
+
+        <!-- 设备筛选 -->
         <div class="flex items-center gap-2">
           <label class="text-sm text-[#8892a0]">设备筛选</label>
           <a-select
@@ -29,7 +62,7 @@
             class="w-44"
             popup-class-name="device-select-dropdown"
           >
-            <a-select-option value="__all__">门店汇总 (全部设备)</a-select-option>
+            <a-select-option value="__all__">门店汇总(全部设备)</a-select-option>
             <a-select-option
               v-for="d in deviceOptions"
               :key="d.id"
@@ -39,6 +72,8 @@
             </a-select-option>
           </a-select>
         </div>
+
+        <!-- 查询按钮 -->
         <button
           @click="fetchData"
           :disabled="loading"
@@ -46,6 +81,8 @@
         >
           查询
         </button>
+
+        <!-- 图表类型切换 -->
         <div class="flex border border-[#1e293b] rounded-lg overflow-hidden">
           <button
             @click="chartType = 'area'"
@@ -56,8 +93,7 @@
                 : 'bg-[#0a192f] text-[#8892a0] hover:text-white',
             ]"
           >
-            <LineChart class="w-3.5 h-3.5" />
-            趋势图
+            <LineChart class="w-3.5 h-3.5" /> 趋势图
           </button>
           <button
             @click="chartType = 'bar'"
@@ -68,27 +104,26 @@
                 : 'bg-[#0a192f] text-[#8892a0] hover:text-white',
             ]"
           >
-            <BarChart3 class="w-3.5 h-3.5" />
-            柱状图
+            <BarChart3 class="w-3.5 h-3.5" /> 柱状图
           </button>
         </div>
+
+        <!-- 导出CSV -->
         <button
           @click="handleExportCSV"
           :disabled="data.length === 0 || loading"
           class="border border-[#1e293b] text-[#8892a0] hover:text-white hover:bg-[#172a45] rounded-md px-4 py-2 text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Download class="w-4 h-4" />
-          导出CSV
+          <Download class="w-4 h-4" /> 导出CSV
         </button>
       </div>
+
       <!-- 视图说明 -->
       <div class="mt-2">
         <span class="text-xs text-[#8892a0]">
-          {{
-            isStoreView
-              ? '当前查看: 门店汇总 (所有设备客流之和)'
-              : `当前查看: 单设备 (${deviceOptions.find(d => d.id === selectedDevice)?.name || ''})`
-          }}
+          {{ dimensionLabel }}
+          ·
+          {{ isStoreView ? '门店汇总(所有设备客流之和)' : `单设备(${selectedDeviceName})` }}
         </span>
       </div>
     </div>
@@ -96,7 +131,8 @@
     <!-- Chart -->
     <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
       <h3 class="text-white font-medium mb-4">
-        历史客流数据 {{ isStoreView ? '(门店汇总)' : '(单设备)' }}
+        {{ dimensionTitle }}
+        {{ isStoreView ? '(门店汇总)' : '(单设备)' }}
       </h3>
       <div v-if="loading" class="h-[350px] w-full bg-[#1e293b] rounded-md animate-pulse" />
       <div v-else-if="data.length === 0" class="flex items-center justify-center h-[350px] text-[#8892a0]">
@@ -105,87 +141,62 @@
       <v-chart v-else :option="chartOption" autoresize class="w-full" style="height: 350px" />
     </div>
 
-    <!-- 单天门店汇总: 各设备分栏明细 -->
-    <div
-      v-if="!loading && isSingleDay && isStoreView && deviceDailyData.length > 0"
-      class="bg-[#112240] border border-[#1e293b] rounded-lg p-5"
-    >
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-white font-medium">各设备客流分栏</h3>
-        <span class="text-xs text-[#8892a0]">
-          {{ deviceDailyData.length }} 台设备贡献
-        </span>
+    <!-- 数值汇总 -->
+    <div v-if="!loading && data.length > 0" class="grid grid-cols-3 gap-4">
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
+        <p class="text-xs text-[#8892a0] mb-1">总进入</p>
+        <p class="text-xl font-bold text-[#00d9ff]">{{ totalIn.toLocaleString() }}</p>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div
-          v-for="(dev, idx) in deviceDailyData"
-          :key="dev.deviceId"
-          class="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4"
-        >
-          <div class="flex items-center gap-2 mb-3">
-            <Camera class="w-4 h-4" :style="{ color: DEVICE_COLORS[idx % DEVICE_COLORS.length] }" />
-            <span class="text-sm text-white font-medium truncate">{{ dev.deviceName }}</span>
-            <span class="text-xs text-[#8892a0] ml-auto">{{ dev.percentage }}%</span>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div>
-              <p class="text-[10px] text-[#8892a0]">进入</p>
-              <p class="text-sm font-bold text-[#00d9ff]">{{ dev.countIn }}</p>
-            </div>
-            <div>
-              <p class="text-[10px] text-[#8892a0]">出去</p>
-              <p class="text-sm font-bold text-[#00ff88]">{{ dev.countOut }}</p>
-            </div>
-            <div>
-              <p class="text-[10px] text-[#8892a0]">在场</p>
-              <p class="text-sm font-bold text-[#4a9eff]">{{ dev.currentInside }}</p>
-            </div>
-          </div>
-          <div class="mt-2 h-1.5 bg-[#1e293b] rounded-full overflow-hidden">
-            <div
-              class="h-full rounded-full"
-              :style="{
-                width: `${dev.percentage}%`,
-                backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length],
-              }"
-            />
-          </div>
-        </div>
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
+        <p class="text-xs text-[#8892a0] mb-1">总出去</p>
+        <p class="text-xl font-bold text-[#00ff88]">{{ totalOut.toLocaleString() }}</p>
+      </div>
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
+        <p class="text-xs text-[#8892a0] mb-1">{{ avgLabel }}</p>
+        <p class="text-xl font-bold text-[#4a9eff]">{{ averageValue.toLocaleString() }}</p>
       </div>
     </div>
 
-    <!-- Data Table Summary -->
+    <!-- 数据明细表格 -->
     <div v-if="!loading && data.length > 0" class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-      <h3 class="text-white font-medium mb-3">
-        数据汇总 {{ isStoreView ? '(门店)' : '(单设备)' }}
-      </h3>
-      <div class="grid grid-cols-3 gap-4">
-        <div class="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 text-center">
-          <p class="text-xs text-[#8892a0] mb-1">总进入</p>
-          <p class="text-xl font-bold text-[#00d9ff]">
-            {{ totalIn.toLocaleString() }}
-          </p>
-        </div>
-        <div class="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 text-center">
-          <p class="text-xs text-[#8892a0] mb-1">总出去</p>
-          <p class="text-xl font-bold text-[#00ff88]">
-            {{ totalOut.toLocaleString() }}
-          </p>
-        </div>
-        <div class="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 text-center">
-          <p class="text-xs text-[#8892a0] mb-1">日均进入</p>
-          <p class="text-xl font-bold text-[#4a9eff]">
-            {{ dailyAvgIn.toLocaleString() }}
-          </p>
-        </div>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-medium">数据明细</h3>
+        <span class="text-xs text-[#8892a0]">{{ data.length }} 条记录</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[#1e293b]">
+              <th class="text-left py-2 px-3 text-[#8892a0] font-medium">{{ dimension === 'hour' ? '时段' : '日期' }}</th>
+              <th class="text-right py-2 px-3 text-[#00d9ff] font-medium">进入</th>
+              <th class="text-right py-2 px-3 text-[#00ff88] font-medium">出去</th>
+              <th class="text-right py-2 px-3 text-[#4a9eff] font-medium">净流入</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(row, idx) in data"
+              :key="idx"
+              class="border-b border-[#1e293b]/50 hover:bg-[#172a45] transition-colors"
+            >
+              <td class="py-2 px-3 text-white">{{ row.label }}</td>
+              <td class="py-2 px-3 text-right text-white">{{ row.countIn.toLocaleString() }}</td>
+              <td class="py-2 px-3 text-right text-white">{{ row.countOut.toLocaleString() }}</td>
+              <td class="py-2 px-3 text-right" :class="(row.countIn - row.countOut) >= 0 ? 'text-[#00d9ff]' : 'text-[#ef4444]'">
+                {{ (row.countIn - row.countOut).toLocaleString() }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Download, BarChart3, LineChart, Camera } from 'lucide-vue-next'
+import { Download, BarChart3, LineChart } from 'lucide-vue-next'
 import dayjs from 'dayjs'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -199,22 +210,10 @@ import VChart from 'vue-echarts'
 
 use([CanvasRenderer, ELineChart, EBarChart, GridComponent, TooltipComponent, LegendComponent])
 
-interface DailyData {
-  date: string
+interface HistoryRow {
+  label: string
   countIn: number
   countOut: number
-}
-
-interface DeviceDailyData {
-  deviceId: string
-  deviceName: string
-  deviceLocation: string
-  deviceStatus: string
-  deviceIp: string
-  countIn: number
-  countOut: number
-  currentInside: number
-  percentage: number
 }
 
 interface DeviceOption {
@@ -224,40 +223,59 @@ interface DeviceOption {
 
 const DEVICE_COLORS = ['#00d9ff', '#00ff88', '#ff9500', '#a855f7', '#f43f5e', '#06b6d4', '#f97316', '#10b981']
 
-const today = new Date()
-const defaultEndDate = today.toISOString().split('T')[0]
-const weekAgo = new Date(today)
-weekAgo.setDate(weekAgo.getDate() - 7)
-const defaultStartDate = weekAgo.toISOString().split('T')[0]
+const dimensionOptions = [
+  { value: 'hour', label: '小时' },
+  { value: 'day', label: '天' },
+  { value: 'week', label: '周' },
+  { value: 'month', label: '月' },
+  { value: 'year', label: '年' },
+]
 
-const startDate = ref(defaultStartDate)
-const endDate = ref(defaultEndDate)
+const today = new Date()
+const todayStr = today.toISOString().split('T')[0]
+
+const dimension = ref<string>('hour')
+const startDate = ref(todayStr)
+const endDate = ref(todayStr)
 const selectedDevice = ref('__all__')
 const deviceOptions = ref<DeviceOption[]>([])
-const data = ref<DailyData[]>([])
-const deviceDailyData = ref<DeviceDailyData[]>([])
+const data = ref<HistoryRow[]>([])
 const loading = ref(false)
 const chartType = ref<'area' | 'bar'>('area')
 
-const isSingleDay = computed(() => startDate.value === endDate.value)
 const isStoreView = computed(() => selectedDevice.value === '__all__')
 
-const chartData = computed(() =>
-  data.value.map((d) => ({
-    ...d,
-    date: d.date.slice(5),
-  }))
-)
+const selectedDeviceName = computed(() => {
+  if (selectedDevice.value === '__all__') return '全部'
+  return deviceOptions.value.find(d => d.id === selectedDevice.value)?.name || ''
+})
+
+const dimensionLabel = computed(() => {
+  const dim = dimensionOptions.find(d => d.value === dimension.value)
+  return dim ? `当前维度: ${dim.label}` : ''
+})
+
+const dimensionTitle = computed(() => {
+  const dim = dimensionOptions.find(d => d.value === dimension.value)
+  return dim ? `${dim.label}度客流数据` : '历史客流数据'
+})
+
+const avgLabel = computed(() => {
+  const dim = dimensionOptions.find(d => d.value === dimension.value)
+  return dim ? `平均${dim.label}` : '平均值'
+})
 
 const totalIn = computed(() => data.value.reduce((s, d) => s + d.countIn, 0))
 const totalOut = computed(() => data.value.reduce((s, d) => s + d.countOut, 0))
-const dailyAvgIn = computed(() => Math.round(totalIn.value / data.value.length))
+const averageValue = computed(() => {
+  if (data.value.length === 0) return 0
+  return Math.round(totalIn.value / data.value.length)
+})
 
 const chartOption = computed(() => {
-  const xData = chartData.value.map((d) => d.date)
-  const inData = chartData.value.map((d) => d.countIn)
-  const outData = chartData.value.map((d) => d.countOut)
-
+  const xData = data.value.map(d => d.label)
+  const inData = data.value.map(d => d.countIn)
+  const outData = data.value.map(d => d.countOut)
   const isArea = chartType.value === 'area'
 
   return {
@@ -296,13 +314,18 @@ const chartOption = computed(() => {
       data: xData,
       axisLine: { lineStyle: { color: '#1e293b' } },
       axisTick: { show: false },
-      axisLabel: { color: '#8892a0', fontSize: 12 },
+      axisLabel: {
+        color: '#8892a0',
+        fontSize: 11,
+        rotate: dimension.value === 'hour' ? 0 : 35,
+      },
     },
     yAxis: {
       type: 'value' as const,
       axisLine: { show: false },
       splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
       axisLabel: { color: '#8892a0', fontSize: 12 },
+      min: 0,
     },
     series: [
       {
@@ -316,10 +339,7 @@ const chartOption = computed(() => {
           ? {
               color: {
                 type: 'linear' as const,
-                x: 0,
-                y: 0,
-                x2: 0,
-                y2: 1,
+                x: 0, y: 0, x2: 0, y2: 1,
                 colorStops: [
                   { offset: 0, color: 'rgba(0,217,255,0.3)' },
                   { offset: 1, color: 'rgba(0,217,255,0)' },
@@ -343,10 +363,7 @@ const chartOption = computed(() => {
           ? {
               color: {
                 type: 'linear' as const,
-                x: 0,
-                y: 0,
-                x2: 0,
-                y2: 1,
+                x: 0, y: 0, x2: 0, y2: 1,
                 colorStops: [
                   { offset: 0, color: 'rgba(0,255,136,0.3)' },
                   { offset: 1, color: 'rgba(0,255,136,0)' },
@@ -363,11 +380,42 @@ const chartOption = computed(() => {
   }
 })
 
+function switchDimension(dim: string) {
+  dimension.value = dim
+  if (dim === 'hour') {
+    // 小时维度: 只选当天
+    endDate.value = startDate.value
+  } else {
+    // 切换到其他维度, 如果起止日期相同则设置一个适当的默认范围
+    if (startDate.value === endDate.value) {
+      const d = new Date(startDate.value)
+      if (dim === 'day') {
+        // 过去30天
+        d.setDate(d.getDate() - 29)
+        startDate.value = d.toISOString().split('T')[0]
+      } else if (dim === 'week') {
+        // 过去4周
+        d.setDate(d.getDate() - 27)
+        startDate.value = d.toISOString().split('T')[0]
+      } else if (dim === 'month') {
+        // 过去6个月
+        d.setMonth(d.getMonth() - 5)
+        startDate.value = d.toISOString().split('T')[0]
+      } else if (dim === 'year') {
+        // 过去3年
+        d.setFullYear(d.getFullYear() - 2)
+        startDate.value = d.toISOString().split('T')[0]
+      }
+    }
+  }
+  fetchData()
+}
+
 // 加载设备列表
 onMounted(() => {
   fetch('/api/devices')
-    .then((res) => (res.ok ? res.json() : null))
-    .then((json) => {
+    .then(res => res.ok ? res.json() : null)
+    .then(json => {
       const list = json?.data || []
       deviceOptions.value = Array.isArray(list)
         ? list.map((d: any) => ({ id: d.id, name: d.name }))
@@ -384,6 +432,7 @@ async function fetchData() {
     const params = new URLSearchParams({
       startDate: startDate.value,
       endDate: endDate.value,
+      dimension: dimension.value,
     })
     if (selectedDevice.value && selectedDevice.value !== '__all__') {
       params.set('deviceId', selectedDevice.value)
@@ -392,8 +441,7 @@ async function fetchData() {
     if (res.ok) {
       const json = await res.json()
       const apiData = json.data || json
-      data.value = apiData.daily || []
-      deviceDailyData.value = apiData.dailyDeviceData || []
+      data.value = apiData.data || []
     }
   } catch {
     // Keep empty
@@ -406,13 +454,11 @@ function handleExportCSV() {
   if (data.value.length === 0) return
 
   const BOM = '\uFEFF'
-  const deviceLabel =
-    selectedDevice.value === '__all__'
-      ? '门店汇总'
-      : `设备${selectedDevice.value}`
-  const headers = `日期,${deviceLabel}进入人数,${deviceLabel}出去人数\n`
+  const deviceLabel = isStoreView ? '门店汇总' : `设备${selectedDevice.value}`
+  const dimLabel = dimensionOptions.find(d => d.value === dimension.value)?.label || ''
+  const headers = `${dimLabel},${deviceLabel}进入人数,${deviceLabel}出去人数\n`
   const rows = data.value
-    .map((d) => `${d.date},${d.countIn},${d.countOut}`)
+    .map(d => `${d.label},${d.countIn},${d.countOut}`)
     .join('\n')
   const csv = BOM + headers + rows
 
@@ -420,7 +466,7 @@ function handleExportCSV() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `客流数据_${startDate.value}_${endDate.value}.csv`
+  link.download = `客流数据_${dimension.value}_${startDate.value}_${endDate.value}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
