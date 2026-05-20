@@ -293,147 +293,149 @@ function getMetricValue(key: string): number {
       <VChart v-else :option="hourlyChartOption" class="w-full" style="height: 300px" autoresize />
     </div>
 
-    <!-- 各设备今日客流分栏明细 -->
-    <div v-if="devicesToday.length > 0" class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <h3 class="text-white font-medium">各设备今日客流</h3>
-          <span class="text-xs text-[#8892a0]">门店客流由 {{ devicesToday.length }} 台设备汇总得出</span>
+    <!-- 各设备今日客流 + 设备状态 并排一行 -->
+    <div class="flex flex-col lg:flex-row gap-4">
+      <!-- 各设备今日客流分栏明细 -->
+      <div v-if="devicesToday.length > 0" class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <h3 class="text-white font-medium">各设备今日客流</h3>
+            <span class="text-xs text-[#8892a0]">门店客流由 {{ devicesToday.length }} 台设备汇总得出</span>
+          </div>
         </div>
-      </div>
-      <template v-if="loading">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <a-skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" :loading="true" :paragraph="false" />
-        </div>
-      </template>
-      <template v-else>
-        <!-- 设备卡片列表 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-          <div
-            v-for="(dev, idx) in devicesToday"
-            :key="dev.deviceId"
-            class="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 card-hover"
-          >
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-2">
-                <div
-                  class="w-2.5 h-2.5 rounded-full"
-                  :style="{ backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length] }"
-                />
-                <span class="text-sm text-white font-medium truncate">
-                  {{ dev.deviceName }}
+        <template v-if="loading">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a-skeleton v-for="i in 2" :key="i" class="h-24 w-full rounded-lg" :loading="true" :paragraph="false" />
+          </div>
+        </template>
+        <template v-else>
+          <!-- 设备卡片列表 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            <div
+              v-for="(dev, idx) in devicesToday"
+              :key="dev.deviceId"
+              class="bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 card-hover"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <div
+                    class="w-2.5 h-2.5 rounded-full"
+                    :style="{ backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length] }"
+                  />
+                  <span class="text-sm text-white font-medium truncate">
+                    {{ dev.deviceName }}
+                  </span>
+                </div>
+                <span class="text-xs text-[#8892a0]">
+                  占比 {{ dev.percentage }}%
                 </span>
               </div>
-              <span class="text-xs text-[#8892a0]">
-                占比 {{ dev.percentage }}%
-              </span>
-            </div>
-            <div class="flex items-center gap-3">
-              <div class="flex-1">
-                <div class="flex items-baseline gap-1">
-                  <span class="text-lg font-bold text-[#00d9ff]">
-                    {{ dev.todayIn.toLocaleString() }}
-                  </span>
-                  <span class="text-[10px] text-[#8892a0]">进</span>
+              <div class="flex items-center gap-3">
+                <div class="flex-1">
+                  <div class="flex items-baseline gap-1">
+                    <span class="text-lg font-bold text-[#00d9ff]">
+                      {{ dev.todayIn.toLocaleString() }}
+                    </span>
+                    <span class="text-[10px] text-[#8892a0]">进</span>
+                  </div>
+                  <div class="flex items-baseline gap-1 mt-0.5">
+                    <span class="text-sm text-[#00ff88]">
+                      {{ dev.todayOut.toLocaleString() }}
+                    </span>
+                    <span class="text-[10px] text-[#8892a0]">出</span>
+                  </div>
                 </div>
-                <div class="flex items-baseline gap-1 mt-0.5">
-                  <span class="text-sm text-[#00ff88]">
-                    {{ dev.todayOut.toLocaleString() }}
-                  </span>
-                  <span class="text-[10px] text-[#8892a0]">出</span>
+                <div class="text-right">
+                  <p class="text-[10px] text-[#8892a0]">在场</p>
+                  <p class="text-sm font-medium text-[#4a9eff]">
+                    {{ dev.currentInside }}
+                  </p>
                 </div>
               </div>
-              <div class="text-right">
-                <p class="text-[10px] text-[#8892a0]">在场</p>
-                <p class="text-sm font-medium text-[#4a9eff]">
-                  {{ dev.currentInside }}
-                </p>
+              <!-- 占比进度条 -->
+              <div class="mt-2 h-1.5 bg-[#1e293b] rounded-full overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-all duration-500"
+                  :style="{
+                    width: `${dev.percentage}%`,
+                    backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length],
+                  }"
+                />
               </div>
             </div>
-            <!-- 占比进度条 -->
-            <div class="mt-2 h-1.5 bg-[#1e293b] rounded-full overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all duration-500"
-                :style="{
-                  width: `${dev.percentage}%`,
-                  backgroundColor: DEVICE_COLORS[idx % DEVICE_COLORS.length],
+          </div>
+        </template>
+      </div>
+
+      <!-- 设备在线状态 -->
+      <div class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-white font-medium">设备状态</h3>
+          <span class="text-xs text-[#8892a0]">
+            共 {{ devices.length }} 台设备 · 在线 {{ devices.filter(d => d.status === 'online').length }} 台
+          </span>
+        </div>
+        <template v-if="loading">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a-skeleton v-for="i in 2" :key="i" class="h-20 w-full rounded-lg" :loading="true" :paragraph="false" />
+          </div>
+        </template>
+        <div v-else-if="devices.length === 0" class="text-center py-12 text-[#8892a0]">
+          <Camera class="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p class="text-sm mb-1">暂无设备</p>
+          <p class="text-xs opacity-60">请前往「设备管理」页面添加摄像头设备</p>
+        </div>
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div
+            v-for="device in devices"
+            :key="device.id"
+            class="flex items-center gap-3 bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 card-hover"
+          >
+            <div
+              class="w-10 h-10 rounded-lg flex items-center justify-center"
+              :class="{
+                'bg-[#00ff88]/10': device.status === 'online',
+                'bg-[#ff9500]/10': device.status === 'warning',
+                'bg-[#ef4444]/10': device.status !== 'online' && device.status !== 'warning',
+              }"
+            >
+              <Camera
+                class="w-5 h-5 flex-shrink-0"
+                :class="{
+                  'text-[#00ff88]': device.status === 'online',
+                  'text-[#ff9500]': device.status === 'warning',
+                  'text-[#ef4444]': device.status !== 'online' && device.status !== 'warning',
                 }"
               />
             </div>
-          </div>
-        </div>
-
-      </template>
-    </div>
-
-    <!-- 设备在线状态 -->
-    <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-white font-medium">设备状态</h3>
-        <span class="text-xs text-[#8892a0]">
-          共 {{ devices.length }} 台设备 · 在线 {{ devices.filter(d => d.status === 'online').length }} 台
-        </span>
-      </div>
-      <template v-if="loading">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <a-skeleton v-for="i in 3" :key="i" class="h-20 w-full rounded-lg" :loading="true" :paragraph="false" />
-        </div>
-      </template>
-      <div v-else-if="devices.length === 0" class="text-center py-12 text-[#8892a0]">
-        <Camera class="w-12 h-12 mx-auto mb-3 opacity-30" />
-        <p class="text-sm mb-1">暂无设备</p>
-        <p class="text-xs opacity-60">请前往「设备管理」页面添加摄像头设备</p>
-      </div>
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div
-          v-for="device in devices"
-          :key="device.id"
-          class="flex items-center gap-3 bg-[#0a192f] border border-[#1e293b] rounded-lg p-4 card-hover"
-        >
-          <div
-            class="w-10 h-10 rounded-lg flex items-center justify-center"
-            :class="{
-              'bg-[#00ff88]/10': device.status === 'online',
-              'bg-[#ff9500]/10': device.status === 'warning',
-              'bg-[#ef4444]/10': device.status !== 'online' && device.status !== 'warning',
-            }"
-          >
-            <Camera
-              class="w-5 h-5 flex-shrink-0"
-              :class="{
-                'text-[#00ff88]': device.status === 'online',
-                'text-[#ff9500]': device.status === 'warning',
-                'text-[#ef4444]': device.status !== 'online' && device.status !== 'warning',
-              }"
-            />
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-white font-medium truncate">
-              {{ device.name }}
-            </p>
-            <p class="text-xs text-[#8892a0] truncate">
-              {{ device.location }} · {{ device.ip }}
-            </p>
-          </div>
-          <div class="flex items-center gap-1.5 flex-shrink-0">
-            <div
-              class="w-2 h-2 rounded-full"
-              :class="{
-                'bg-[#00ff88] animate-pulse-green': device.status === 'online',
-                'bg-[#ff9500]': device.status === 'warning',
-                'bg-[#ef4444]': device.status !== 'online' && device.status !== 'warning',
-              }"
-            />
-            <span
-              class="text-xs font-medium"
-              :class="{
-                'text-[#00ff88]': device.status === 'online',
-                'text-[#ff9500]': device.status === 'warning',
-                'text-[#ef4444]': device.status !== 'online' && device.status !== 'warning',
-              }"
-            >
-              {{ device.status === 'online' ? '在线' : device.status === 'warning' ? '告警' : '离线' }}
-            </span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-white font-medium truncate">
+                {{ device.name }}
+              </p>
+              <p class="text-xs text-[#8892a0] truncate">
+                {{ device.location }} · {{ device.ip }}
+              </p>
+            </div>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <div
+                class="w-2 h-2 rounded-full"
+                :class="{
+                  'bg-[#00ff88] animate-pulse-green': device.status === 'online',
+                  'bg-[#ff9500]': device.status === 'warning',
+                  'bg-[#ef4444]': device.status !== 'online' && device.status !== 'warning',
+                }"
+              />
+              <span
+                class="text-xs font-medium"
+                :class="{
+                  'text-[#00ff88]': device.status === 'online',
+                  'text-[#ff9500]': device.status === 'warning',
+                  'text-[#ef4444]': device.status !== 'online' && device.status !== 'warning',
+                }"
+              >
+                {{ device.status === 'online' ? '在线' : device.status === 'warning' ? '告警' : '离线' }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
