@@ -264,7 +264,7 @@ function getMetricValue(key: string): number {
   <div class="space-y-6">
     <!-- 门店名称 + 指标卡片 -->
     <div>
-      <div class="flex items-center gap-2 mb-4">
+      <div class="flex items-baseline gap-2 mb-4">
         <Store class="w-4 h-4 text-[#00d9ff]" />
         <h2 class="text-lg font-medium text-white">{{ storeName }}</h2>
         <span class="text-xs text-[#8892a0]">· 门店汇总</span>
@@ -307,39 +307,38 @@ function getMetricValue(key: string): number {
       </div>
 
       <!-- 实时视频 (1/3) -->
-      <div class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-        <div class="flex items-center justify-between mb-4">
+      <div class="flex-1 flex flex-col bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+        <div class="flex items-center justify-between mb-4 flex-shrink-0">
           <h3 class="text-white font-medium">实时视频</h3>
+          <!-- 设备切换下拉 - 放在标题右侧 -->
+          <a-select
+            v-if="devices.length > 0"
+            v-model:value="selectedVideoDeviceId"
+            style="width: 140px"
+            placeholder="选择设备"
+            :options="devices.map(d => ({ value: d.id, label: d.name }))"
+            size="small"
+            variant="borderless"
+            :popup-style="{ background: '#112240', border: '1px solid #1e293b' }"
+          >
+            <template #suffixIcon>
+              <Camera class="w-3.5 h-3.5 text-[#00d9ff]" />
+            </template>
+          </a-select>
         </div>
         <template v-if="loading">
-          <a-skeleton class="h-[200px] w-full" :loading="true" :paragraph="false" />
+          <a-skeleton class="flex-1 w-full rounded-lg" :loading="true" :paragraph="false" />
         </template>
         <template v-else-if="devices.length === 0">
-          <div class="text-center py-12 text-[#8892a0]">
+          <div class="flex-1 flex items-center justify-center text-[#8892a0]">
             <Camera class="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p class="text-sm mb-1">暂无设备</p>
             <p class="text-xs opacity-60">请前往「设备管理」页面添加摄像头设备</p>
           </div>
         </template>
         <template v-else>
-          <!-- 设备切换下拉 -->
-          <div class="mb-3">
-            <a-select
-              v-model:value="selectedVideoDeviceId"
-              style="width: 100%"
-              placeholder="选择设备"
-              :options="devices.map(d => ({ value: d.id, label: d.name }))"
-              size="small"
-              variant="borderless"
-              :popup-style="{ background: '#112240', border: '1px solid #1e293b' }"
-            >
-              <template #suffixIcon>
-                <Camera class="w-3.5 h-3.5 text-[#00d9ff]" />
-              </template>
-            </a-select>
-          </div>
-          <!-- 视频播放器 -->
-          <div class="rounded-lg overflow-hidden">
+          <!-- 视频播放器 - 撑满剩余空间 -->
+          <div class="flex-1 rounded-lg overflow-hidden bg-black">
             <RTSPVideoPlayer
               v-if="selectedVideoDeviceId"
               :key="selectedVideoDeviceId"
@@ -347,10 +346,9 @@ function getMetricValue(key: string): number {
               :name="selectedVideoDevice?.name || ''"
               :status="selectedVideoDevice?.status || 'offline'"
               compact
-              class="w-full"
-              style="min-height: 180px"
+              class="w-full h-full"
             />
-            <div v-else class="h-[180px] flex items-center justify-center bg-black/40 rounded-lg">
+            <div v-else class="h-full flex items-center justify-center bg-black/40">
               <p class="text-xs text-[#8892a0]">请选择设备</p>
             </div>
           </div>
@@ -363,7 +361,7 @@ function getMetricValue(key: string): number {
       <!-- 各设备今日客流分栏明细 -->
       <div v-if="devicesToday.length > 0" class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
         <div class="flex items-center justify-between mb-4">
-          <div class="flex items-center gap-2">
+          <div class="flex items-baseline gap-2">
             <h3 class="text-white font-medium">各设备今日客流</h3>
             <span class="text-xs text-[#8892a0]">门店客流由 {{ devicesToday.length }} 台设备汇总得出</span>
           </div>
