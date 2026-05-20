@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, markRaw, type Component } from 'vue'
 import {
   LogIn, LogOut, Users, TrendingUp, TrendingDown, Camera, CalendarDays, Hash, Store,
 } from 'lucide-vue-next'
+import RTSPVideoPlayer from '../video/RTSPVideoPlayer.vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
@@ -140,6 +141,16 @@ const hourlyData = computed(() => {
 const devices = computed(() => data.value?.devices || [])
 const devicesToday = computed(() => data.value?.devicesToday || [])
 const peakHour = computed(() => data.value?.peakHour)
+
+// 实时视频设备切换
+const selectedVideoDeviceId = ref<string>('')
+const selectedVideoDevice = computed(() => devices.value.find(d => d.id === selectedVideoDeviceId.value))
+
+watch(devices, (list) => {
+  if (list.length > 0 && !selectedVideoDeviceId.value) {
+    selectedVideoDeviceId.value = list[0].id
+  }
+}, { immediate: true })
 
 const hourlyChartOption = computed(() => ({
   tooltip: {
@@ -281,16 +292,70 @@ function getMetricValue(key: string): number {
       </div>
     </div>
 
-    <!-- 今日客流趋势 (门店汇总) -->
-    <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-white font-medium">今日客流趋势</h3>
-        <span v-if="peakHour !== null && peakHour !== undefined" class="text-xs text-[#8892a0]">
-          高峰时段: <span class="text-[#ff9500] font-medium">{{ String(peakHour).padStart(2, '0') }}:00</span>
-        </span>
+    <!-- 今日客流趋势 + 实时视频 并排一行 -->
+    <div class="flex flex-col lg:flex-row gap-4">
+      <!-- 今日客流趋势 (2/3) -->
+      <div class="flex-[2] bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-white font-medium">今日客流趋势</h3>
+          <span v-if="peakHour !== null && peakHour !== undefined" class="text-xs text-[#8892a0]">
+            高峰时段: <span class="text-[#ff9500] font-medium">{{ String(peakHour).padStart(2, '0') }}:00</span>
+          </span>
+        </div>
+        <a-skeleton v-if="loading" class="h-[300px] w-full" :loading="true" :paragraph="false" />
+        <VChart v-else :option="hourlyChartOption" class="w-full" style="height: 300px" autoresize />
       </div>
-      <a-skeleton v-if="loading" class="h-[300px] w-full" :loading="true" :paragraph="false" />
-      <VChart v-else :option="hourlyChartOption" class="w-full" style="height: 300px" autoresize />
+
+      <!-- 实时视频 (1/3) -->
+      <div class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-white font-medium">实时视频</h3>
+        </div>
+        <template v-if="loading">
+          <a-skeleton class="h-[200px] w-full" :loading="true" :paragraph="false" />
+        </template>
+        <template v-else-if="devices.length === 0">
+          <div class="text-center py-12 text-[#8892a0]">
+            <Camera class="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p class="text-sm mb-1">暂无设备</p>
+            <p class="text-xs opacity-60">请前往「设备管理」页面添加摄像头设备</p>
+          </div>
+        </template>
+        <template v-else>
+          <!-- 设备切换下拉 -->
+          <div class="mb-3">
+            <a-select
+              v-model:value="selectedVideoDeviceId"
+              style="width: 100%"
+              placeholder="选择设备"
+              :options="devices.map(d => ({ value: d.id, label: d.name }))"
+              size="small"
+              variant="borderless"
+              :popup-style="{ background: '#112240', border: '1px solid #1e293b' }"
+            >
+              <template #suffixIcon>
+                <Camera class="w-3.5 h-3.5 text-[#00d9ff]" />
+              </template>
+            </a-select>
+          </div>
+          <!-- 视频播放器 -->
+          <div class="rounded-lg overflow-hidden">
+            <RTSPVideoPlayer
+              v-if="selectedVideoDeviceId"
+              :key="selectedVideoDeviceId"
+              :device-id="selectedVideoDeviceId"
+              :name="selectedVideoDevice?.name || ''"
+              :status="selectedVideoDevice?.status || 'offline'"
+              compact
+              class="w-full"
+              style="min-height: 180px"
+            />
+            <div v-else class="h-[180px] flex items-center justify-center bg-black/40 rounded-lg">
+              <p class="text-xs text-[#8892a0]">请选择设备</p>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- 各设备今日客流 + 设备状态 并排一行 -->
