@@ -357,9 +357,9 @@ function getMetricValue(key: string): number {
     </div>
 
     <!-- 各设备今日客流 + 设备状态 并排一行 -->
-    <div class="flex flex-col lg:flex-row gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- 各设备今日客流分栏明细 -->
-      <div v-if="devicesToday.length > 0" class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+      <div v-if="devicesToday.length > 0" class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-baseline gap-2">
             <h3 class="text-white font-medium">各设备今日客流</h3>
@@ -431,7 +431,7 @@ function getMetricValue(key: string): number {
       </div>
 
       <!-- 设备在线状态 -->
-      <div class="flex-1 bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-white font-medium">设备状态</h3>
           <span class="text-xs text-[#8892a0]">
