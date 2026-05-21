@@ -268,6 +268,19 @@ onMounted(() => {
             @input="(e) => updateProp('digits', Number((e.target as HTMLInputElement).value))"
           />
         </div>
+        <h4 class="text-xs text-[#8892a0] mt-3">文本样式</h4>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体大小</label>
+          <input type="number" :value="component.styles?.fontSize || 24" min="12" max="128"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1 text-sm text-white"
+            @input="(e) => updateStyle('fontSize', Number(($event.target as HTMLInputElement).value))" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体颜色</label>
+          <input type="color" :value="component.styles?.color || '#ffffff'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateStyle('color', ($event.target as HTMLInputElement).value)" />
+        </div>
       </div>
 
       <div v-if="component.type === 'chart-line' || component.type === 'chart-bar'" class="space-y-2">
@@ -350,6 +363,38 @@ onMounted(() => {
             <option :value="3">H3 - 小标题</option>
           </select>
         </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体大小</label>
+          <input type="number" :value="component.styles?.fontSize || 24" min="12" max="128"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1 text-sm text-white"
+            @input="(e) => updateStyle('fontSize', Number(($event.target as HTMLInputElement).value))" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体颜色</label>
+          <input type="color" :value="component.styles?.color || '#ffffff'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateStyle('color', ($event.target as HTMLInputElement).value)" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体粗细</label>
+          <select :value="component.styles?.fontWeight || 'normal'"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1.5 text-sm text-white"
+            @change="(e) => updateStyle('fontWeight', ($event.target as HTMLSelectElement).value)">
+            <option value="normal">常规</option>
+            <option value="bold">加粗</option>
+            <option value="lighter">细体</option>
+          </select>
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">文字对齐</label>
+          <select :value="component.styles?.textAlign || 'center'"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1.5 text-sm text-white"
+            @change="(e) => updateStyle('textAlign', ($event.target as HTMLSelectElement).value)">
+            <option value="left">左对齐</option>
+            <option value="center">居中</option>
+            <option value="right">右对齐</option>
+          </select>
+        </div>
       </div>
 
       <div v-if="component.type === 'clock'" class="space-y-2">
@@ -393,6 +438,32 @@ onMounted(() => {
             class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1 text-sm text-white"
             @input="(e) => updateProp('fontSize', Number((e.target as HTMLInputElement).value))"
           />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体颜色</label>
+          <input type="color" :value="component.styles?.color || '#ffffff'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateStyle('color', ($event.target as HTMLInputElement).value)" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">字体粗细</label>
+          <select :value="component.styles?.fontWeight || 'normal'"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1.5 text-sm text-white"
+            @change="(e) => updateStyle('fontWeight', ($event.target as HTMLSelectElement).value)">
+            <option value="normal">常规</option>
+            <option value="bold">加粗</option>
+            <option value="lighter">细体</option>
+          </select>
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">文字对齐</label>
+          <select :value="component.styles?.textAlign || 'center'"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1.5 text-sm text-white"
+            @change="(e) => updateStyle('textAlign', ($event.target as HTMLSelectElement).value)">
+            <option value="left">左对齐</option>
+            <option value="center">居中</option>
+            <option value="right">右对齐</option>
+          </select>
         </div>
       </div>
 

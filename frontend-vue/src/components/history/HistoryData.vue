@@ -82,7 +82,41 @@
           查询
         </button>
 
-        <!-- 图表类型切换 -->
+      </div>
+
+      <!-- 视图说明 -->
+      <div class="mt-2">
+        <span class="text-xs text-[#8892a0]">
+          {{ dimensionLabel }}
+          ·
+          {{ isStoreView ? '门店汇总(所有设备客流之和)' : `单设备(${selectedDeviceName})` }}
+        </span>
+      </div>
+    </div>
+
+    <!-- 数值汇总 -->
+    <div v-if="!loading && data.length > 0" class="grid grid-cols-3 gap-4">
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
+        <p class="text-xs text-[#8892a0] mb-1">总进入</p>
+        <p class="text-xl font-bold text-[#00d9ff]">{{ totalIn.toLocaleString() }}</p>
+      </div>
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
+        <p class="text-xs text-[#8892a0] mb-1">总出去</p>
+        <p class="text-xl font-bold text-[#00ff88]">{{ totalOut.toLocaleString() }}</p>
+      </div>
+      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
+        <p class="text-xs text-[#8892a0] mb-1">{{ avgLabel }}</p>
+        <p class="text-xl font-bold text-[#4a9eff]">{{ averageValue.toLocaleString() }}</p>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-medium">
+          {{ dimensionTitle }}
+          {{ isStoreView ? '(门店汇总)' : '(单设备)' }}
+        </h3>
         <div class="flex border border-[#1e293b] rounded-lg overflow-hidden">
           <button
             @click="chartType = 'area'"
@@ -107,33 +141,7 @@
             <BarChart3 class="w-3.5 h-3.5" /> 柱状图
           </button>
         </div>
-
-        <!-- 导出CSV -->
-        <button
-          @click="handleExportCSV"
-          :disabled="data.length === 0 || loading"
-          class="border border-[#1e293b] text-[#8892a0] hover:text-white hover:bg-[#172a45] rounded-md px-4 py-2 text-xs font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Download class="w-4 h-4" /> 导出CSV
-        </button>
       </div>
-
-      <!-- 视图说明 -->
-      <div class="mt-2">
-        <span class="text-xs text-[#8892a0]">
-          {{ dimensionLabel }}
-          ·
-          {{ isStoreView ? '门店汇总(所有设备客流之和)' : `单设备(${selectedDeviceName})` }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Chart -->
-    <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
-      <h3 class="text-white font-medium mb-4">
-        {{ dimensionTitle }}
-        {{ isStoreView ? '(门店汇总)' : '(单设备)' }}
-      </h3>
       <div v-if="loading" class="h-[350px] w-full bg-[#1e293b] rounded-md animate-pulse" />
       <div v-else-if="data.length === 0" class="flex items-center justify-center h-[350px] text-[#8892a0]">
         暂无数据
@@ -141,27 +149,19 @@
       <v-chart v-else :option="chartOption" autoresize class="w-full" style="height: 350px" />
     </div>
 
-    <!-- 数值汇总 -->
-    <div v-if="!loading && data.length > 0" class="grid grid-cols-3 gap-4">
-      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
-        <p class="text-xs text-[#8892a0] mb-1">总进入</p>
-        <p class="text-xl font-bold text-[#00d9ff]">{{ totalIn.toLocaleString() }}</p>
-      </div>
-      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
-        <p class="text-xs text-[#8892a0] mb-1">总出去</p>
-        <p class="text-xl font-bold text-[#00ff88]">{{ totalOut.toLocaleString() }}</p>
-      </div>
-      <div class="bg-[#112240] border border-[#1e293b] rounded-lg p-4 text-center">
-        <p class="text-xs text-[#8892a0] mb-1">{{ avgLabel }}</p>
-        <p class="text-xl font-bold text-[#4a9eff]">{{ averageValue.toLocaleString() }}</p>
-      </div>
-    </div>
-
     <!-- 数据明细表格 -->
     <div v-if="!loading && data.length > 0" class="bg-[#112240] border border-[#1e293b] rounded-lg p-5">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-white font-medium">数据明细</h3>
-        <span class="text-xs text-[#8892a0]">{{ data.length }} 条记录</span>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-[#8892a0]">{{ data.length }} 条记录</span>
+          <button
+            @click="handleExportCSV"
+            class="border border-[#1e293b] text-[#8892a0] hover:text-white hover:bg-[#172a45] rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5"
+          >
+            <Download class="w-3.5 h-3.5" /> 导出CSV
+          </button>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -171,24 +171,109 @@
               <th class="text-right py-2 px-3 text-[#00d9ff] font-medium">进入</th>
               <th class="text-right py-2 px-3 text-[#00ff88] font-medium">出去</th>
               <th class="text-right py-2 px-3 text-[#4a9eff] font-medium">净流入</th>
+              <th v-if="dimension === 'hour'" class="text-center py-2 px-3 text-[#8892a0] font-medium" style="width: 100px">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr
-              v-for="(row, idx) in data"
-              :key="idx"
+              v-for="(row, idx) in paginatedData"
+              :key="(currentPage - 1) * PAGE_SIZE + idx"
               class="border-b border-[#1e293b]/50 hover:bg-[#172a45] transition-colors"
             >
               <td class="py-2 px-3 text-white">{{ row.label }}</td>
-              <td class="py-2 px-3 text-right text-white">{{ row.countIn.toLocaleString() }}</td>
-              <td class="py-2 px-3 text-right text-white">{{ row.countOut.toLocaleString() }}</td>
-              <td class="py-2 px-3 text-right" :class="(row.countIn - row.countOut) >= 0 ? 'text-[#00d9ff]' : 'text-[#ef4444]'">
-                {{ (row.countIn - row.countOut).toLocaleString() }}
+              <td class="py-2 px-3 text-right text-white">
+                <template v-if="editingRowIndex === (currentPage - 1) * PAGE_SIZE + idx">
+                  <input
+                    v-model.number="editCountIn"
+                    type="number"
+                    min="0"
+                    class="w-20 bg-[#0a192f] border border-[#1e293b] rounded px-2 py-1 text-white text-right text-sm"
+                  />
+                </template>
+                <template v-else>
+                  {{ row.countIn.toLocaleString() }}
+                </template>
+              </td>
+              <td class="py-2 px-3 text-right text-white">
+                <template v-if="editingRowIndex === (currentPage - 1) * PAGE_SIZE + idx">
+                  <input
+                    v-model.number="editCountOut"
+                    type="number"
+                    min="0"
+                    class="w-20 bg-[#0a192f] border border-[#1e293b] rounded px-2 py-1 text-white text-right text-sm"
+                  />
+                </template>
+                <template v-else>
+                  {{ row.countOut.toLocaleString() }}
+                </template>
+              </td>
+              <td class="py-2 px-3 text-right" :class="(row.countIn - row.countOut) >= 0 ? 'text-[#00d9ff]' : 'text-[#f59e0b]'">
+                {{ Math.max(0, row.countIn - row.countOut).toLocaleString() }}
+              </td>
+              <td v-if="dimension === 'hour'" class="py-2 px-3 text-center">
+                <template v-if="editingRowIndex === (currentPage - 1) * PAGE_SIZE + idx">
+                  <button
+                    @click="saveEdit(row.label)"
+                    :disabled="correcting"
+                    class="text-xs text-[#00d9ff] hover:text-[#00d9ff]/80 mr-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    保存
+                  </button>
+                  <button
+                    @click="cancelEdit"
+                    :disabled="correcting"
+                    class="text-xs text-[#8892a0] hover:text-white disabled:opacity-50 cursor-pointer"
+                  >
+                    取消
+                  </button>
+                </template>
+                <button
+                  v-else
+                  @click="startEdit((currentPage - 1) * PAGE_SIZE + idx, row)"
+                  class="text-[#8892a0] hover:text-[#00d9ff] transition-colors cursor-pointer"
+                >
+                  <Pencil class="w-3.5 h-3.5 inline" />
+                </button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <!-- 分页 -->
+      <div v-if="totalPages > 1" class="flex items-center justify-between mt-4 pt-4 border-t border-[#1e293b]">
+        <span class="text-xs text-[#8892a0]">共 {{ data.length }} 条，第 {{ currentPage }}/{{ totalPages }} 页</span>
+        <div class="flex items-center gap-2">
+          <button
+            @click="goToPage(currentPage - 1)"
+            :disabled="currentPage === 1"
+            class="px-3 py-1.5 text-xs rounded border border-[#1e293b] text-[#8892a0] hover:text-white hover:bg-[#172a45] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            上一页
+          </button>
+          <button
+            v-for="p in paginationPages"
+            :key="p"
+            @click="goToPage(p)"
+            :class="[
+              'px-3 py-1.5 text-xs rounded transition-colors cursor-pointer',
+              p === currentPage
+                ? 'bg-[#00d9ff] text-[#0a192f]'
+                : 'border border-[#1e293b] text-[#8892a0] hover:text-white hover:bg-[#172a45]',
+            ]"
+          >
+            {{ p }}
+          </button>
+          <button
+            @click="goToPage(currentPage + 1)"
+            :disabled="currentPage === totalPages"
+            class="px-3 py-1.5 text-xs rounded border border-[#1e293b] text-[#8892a0] hover:text-white hover:bg-[#172a45] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -196,7 +281,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Download, BarChart3, LineChart } from 'lucide-vue-next'
+import { Download, BarChart3, LineChart, Pencil } from 'lucide-vue-next'
 import dayjs from 'dayjs'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -242,6 +327,42 @@ const deviceOptions = ref<DeviceOption[]>([])
 const data = ref<HistoryRow[]>([])
 const loading = ref(false)
 const chartType = ref<'area' | 'bar'>('area')
+
+// 分页
+const PAGE_SIZE = 20
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(data.value.length / PAGE_SIZE)))
+const paginatedData = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return data.value.slice(start, start + PAGE_SIZE)
+})
+const paginationPages = computed(() => {
+  const total = totalPages.value
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const current = currentPage.value
+  const pages: number[] = [1]
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  if (start > 2) pages.push(-1) // ellipsis marker
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < total - 1) pages.push(-2) // ellipsis marker
+  pages.push(total)
+  return pages
+})
+function goToPage(p: number) {
+  if (p < 1 || p > totalPages.value) return
+  currentPage.value = p
+  // 翻页时取消编辑状态
+  editingRowIndex.value = null
+}
+
+// 修正功能状态
+const editingRowIndex = ref<number | null>(null)
+const editCountIn = ref(0)
+const editCountOut = ref(0)
+const correcting = ref(false)
 
 const isStoreView = computed(() => selectedDevice.value === '__all__')
 
@@ -382,31 +503,25 @@ const chartOption = computed(() => {
 
 function switchDimension(dim: string) {
   dimension.value = dim
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   if (dim === 'hour') {
-    // 小时维度: 只选当天
-    endDate.value = startDate.value
-  } else {
-    // 切换到其他维度, 如果起止日期相同则设置一个适当的默认范围
-    if (startDate.value === endDate.value) {
-      const d = new Date(startDate.value)
-      if (dim === 'day') {
-        // 过去30天
-        d.setDate(d.getDate() - 29)
-        startDate.value = d.toISOString().split('T')[0]
-      } else if (dim === 'week') {
-        // 过去4周
-        d.setDate(d.getDate() - 27)
-        startDate.value = d.toISOString().split('T')[0]
-      } else if (dim === 'month') {
-        // 过去6个月
-        d.setMonth(d.getMonth() - 5)
-        startDate.value = d.toISOString().split('T')[0]
-      } else if (dim === 'year') {
-        // 过去3年
-        d.setFullYear(d.getFullYear() - 2)
-        startDate.value = d.toISOString().split('T')[0]
-      }
-    }
+    startDate.value = todayStr
+    endDate.value = todayStr
+  } else if (dim === 'day' || dim === 'week') {
+    const d = new Date(today)
+    d.setDate(d.getDate() - 29)
+    startDate.value = d.toISOString().split('T')[0]
+    endDate.value = todayStr
+  } else if (dim === 'month') {
+    const d = new Date(today.getFullYear(), 0, 1)
+    startDate.value = d.toISOString().split('T')[0]
+    endDate.value = todayStr
+  } else if (dim === 'year') {
+    const d = new Date(today)
+    d.setFullYear(d.getFullYear() - 2)
+    startDate.value = d.toISOString().split('T')[0]
+    endDate.value = todayStr
   }
   fetchData()
 }
@@ -442,11 +557,53 @@ async function fetchData() {
       const json = await res.json()
       const apiData = json.data || json
       data.value = apiData.data || []
+      // 重置分页
+      currentPage.value = 1
     }
   } catch {
     // Keep empty
   } finally {
     loading.value = false
+  }
+}
+
+// 修正功能：开始编辑
+function startEdit(idx: number, row: HistoryRow) {
+  editingRowIndex.value = idx
+  editCountIn.value = row.countIn
+  editCountOut.value = row.countOut
+}
+
+function cancelEdit() {
+  editingRowIndex.value = null
+}
+
+async function saveEdit(label: string) {
+  // 从 label 提取 hour（格式 "HH:00"）
+  const hour = parseInt(label.split(':')[0], 10)
+  if (isNaN(hour)) return
+  
+  correcting.value = true
+  try {
+    const res = await fetch('/api/traffic/history/correct', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: startDate.value,
+        hour: hour,
+        countIn: editCountIn.value,
+        countOut: editCountOut.value,
+        deviceId: selectedDevice.value === '__all__' ? null : selectedDevice.value,
+      }),
+    })
+    if (res.ok) {
+      editingRowIndex.value = null
+      await fetchData()  // 刷新数据
+    }
+  } catch {
+    // 静默失败
+  } finally {
+    correcting.value = false
   }
 }
 

@@ -32,29 +32,27 @@ const data = useLargeScreenData()
 const containerRef = ref<HTMLElement | null>(null)
 const containerSize = ref({ width: 0, height: 0 })
 
-// 缩放比例 - 分别计算X和Y方向，拉伸填满
-const scaleX = computed(() => {
-  if (containerSize.value.width === 0) return 1
-  return containerSize.value.width / props.config.canvas.width
+// 缩放比例 - 等比缩放（取最小值，确保内容完整显示）
+const scale = computed(() => {
+  if (containerSize.value.width === 0 || containerSize.value.height === 0) return 1
+  const sx = containerSize.value.width / props.config.canvas.width
+  const sy = containerSize.value.height / props.config.canvas.height
+  return Math.min(sx, sy)
 })
 
-const scaleY = computed(() => {
-  if (containerSize.value.height === 0) return 1
-  return containerSize.value.height / props.config.canvas.height
-})
-
-// 计算画布样式 - 100%平铺填满浏览器
+// 计算画布样式 - 等比缩放+居中定位
 const canvasStyle = computed(() => ({
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
+  transform: `translate(-50%, -50%) scale(${scale.value})`,
+  transformOrigin: 'center center',
   width: `${props.config.canvas.width}px`,
   height: `${props.config.canvas.height}px`,
   backgroundColor: props.config.canvas.backgroundColor,
   backgroundImage: props.config.canvas.backgroundImage
     ? `url(${props.config.canvas.backgroundImage})`
     : undefined,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  transform: `scaleX(${scaleX.value}) scaleY(${scaleY.value})`,
-  transformOrigin: 'top left',
 }))
 
 // 排序后的组件列表

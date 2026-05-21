@@ -32,6 +32,7 @@ const emit = defineEmits<{
   select: [component: ComponentConfig | null]
   move: [id: string, position: { x: number; y: number }]
   resize: [id: string, size: { width: number; height: number }, position?: { x: number; y: number }]
+  updateCanvas: [updates: { width?: number; height?: number }]
 }>()
 
 const data = useLargeScreenData()
@@ -341,6 +342,25 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
 
+// 屏幕分辨率预设
+const screenPresets = [
+  { label: '自定义', width: 0, height: 0 },
+  { label: '1920x1080', width: 1920, height: 1080 },
+  { label: '2560x1440', width: 2560, height: 1440 },
+  { label: '3840x2160', width: 3840, height: 2160 },
+]
+
+const selectedPreset = ref('')
+
+// 切换屏幕预设
+function handlePresetChange(label: string) {
+  selectedPreset.value = label
+  const preset = screenPresets.find(p => p.label === label)
+  if (preset && preset.width > 0) {
+    emit('updateCanvas', { width: preset.width, height: preset.height })
+  }
+}
+
 // 暴露缩放方法给父组件
 defineExpose({
   zoomIn,
@@ -380,6 +400,14 @@ defineExpose({
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
       </button>
+      <div class="h-4 w-px bg-[#1e293b] mx-1" />
+      <select
+        :value="selectedPreset"
+        class="bg-[#0a192f] border border-[#1e293b] rounded text-xs text-white px-1.5 py-1 w-auto"
+        @change="(e) => handlePresetChange((e.target as HTMLSelectElement).value)"
+      >
+        <option v-for="preset in screenPresets" :key="preset.label" :value="preset.label">{{ preset.label }}</option>
+      </select>
     </div>
 
     <!-- 画布容器 - 居中显示 -->

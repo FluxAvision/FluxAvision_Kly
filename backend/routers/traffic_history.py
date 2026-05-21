@@ -116,6 +116,78 @@ async def get_history_data(request: Request):
         })
 
 
+
+@router.put("/correct")
+async def correct_traffic_record(request: Request):
+    """
+    修正客流记录
+    参数: date(YYYY-MM-DD), hour(0-23), countIn(修正值), countOut(修正值), deviceId(可选)
+    如果记录存在则更新，不存在则创建
+    """
+    body = await request.json()
+    date_str = body.get("date")
+    hour = body.get("hour")
+    count_in = body.get("countIn", 0)
+    count_out = body.get("countOut", 0)
+    device_id = body.get("deviceId")  # None = 门店汇总
+
+    if not date_str or hour is None:
+        return error_response("缺少必填参数: date, hour", 400)
+
+    date_regex = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if not date_regex.match(date_str):
+        return error_response("日期格式不正确", 400)
+
+    if not isinstance(hour, int) or hour < 0 or hour > 23:
+        return error_response("hour 必须为 0-23 的整数", 400)
+
+    try:
+        count_in_int = int(count_in)
+        count_out_int = int(count_out)
+    except (ValueError, TypeError):
+        return error_response("countIn 和 countOut 必须为数字", 400)
+
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        # 查找匹配的记录
+        query = session.query(TrafficRecord).filter(
+            TrafficRecord.date == date_str,
+            TrafficRecord.hour == hour,
+        )
+        if device_id:
+            query = query.filter(TrafficRecord.deviceId == device_id)
+        else:
+            query = query.filter(TrafficRecord.deviceId.is_(None))
+
+        record = query.first()
+
+        if record:
+            record.countIn = count_in_int
+            record.countOut = count_out_int
+        else:
+            record = TrafficRecord(
+                id=None,  # auto-generate
+                deviceId=device_id,
+                date=date_str,
+                hour=hour,
+                countIn=count_in_int,
+                countOut=count_out_int,
+            )
+            session.add(record)
+
+        session.commit()
+        session.refresh(record)
+
+        return success_response({
+            "id": record.id,
+            "deviceId": record.deviceId,
+            "date": record.date,
+            "hour": record.hour,
+            "countIn": record.countIn,
+            "countOut": record.countOut,
+        })
+
+
 def _aggregate_hourly(records, date_str):
     """按小时聚合 (0-23), 无数据补0"""
     hour_map = {h: {"label": f"{h:02d}:00", "countIn": 0, "countOut": 0} for h in range(24)}
