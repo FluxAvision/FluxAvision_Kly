@@ -13,3 +13,4 @@ from .seed import router as seed_router
 from .device_id import router as device_id_router
 from .device_status import router as device_status_router
 from .stream import router as stream_router
+from .device_push import router as device_push_router

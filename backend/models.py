@@ -73,6 +73,9 @@ class TrafficRecord(Base):
     hour     = Column(Integer, nullable=False, comment="小时 0-23")
     countIn  = Column(Integer, default=0, comment="进入人数")
     countOut = Column(Integer, default=0, comment="出去人数")
+    passby   = Column(Integer, default=0, comment="经过人数(推送)")
+    turnback = Column(Integer, default=0, comment="折返人数(推送)")
+    avgStayTime = Column(Integer, default=0, comment="平均逗留时间ms(推送)")
     createdAt = Column(DateTime, default=_utcnow)
     updatedAt = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 

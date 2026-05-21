@@ -141,6 +141,7 @@ from routers import (
     traffic_router,
     traffic_history_router,
     traffic_dashboard_router,
+    device_push_router,
     traffic_collector_router,
     traffic_stats_router,
     settings_router,
@@ -166,6 +167,7 @@ app.include_router(seed_router)
 app.include_router(stream_router)
 app.include_router(traffic_collector_router)
 app.include_router(traffic_stats_router)
+app.include_router(device_push_router)
 
 
 # ==================== 健康检查 ====================

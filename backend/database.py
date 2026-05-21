@@ -107,6 +107,20 @@ def _migrate_database(engine):
             if col_name not in template_cols:
                 migrations.append(f"ALTER TABLE screen_templates ADD COLUMN {col_name} {col_def}")
 
+        # traffic_records 表迁移（相机推送新增字段）
+        try:
+            traffic_records_cols = {col["name"] for col in inspector.get_columns("traffic_records")}
+        except Exception:
+            traffic_records_cols = set()
+        traffic_records_migrations = [
+            ("passby", "INTEGER DEFAULT 0"),
+            ("turnback", "INTEGER DEFAULT 0"),
+            ("avgStayTime", "INTEGER DEFAULT 0"),
+        ]
+        for col_name, col_def in traffic_records_migrations:
+            if col_name not in traffic_records_cols:
+                migrations.append(f"ALTER TABLE traffic_records ADD COLUMN {col_name} {col_def}")
+
         # 客流统计新表迁移
         new_tables = [
             ("traffic_hourly", """
