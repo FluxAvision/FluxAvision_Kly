@@ -40,7 +40,19 @@ const scale = computed(() => {
   return Math.min(sx, sy)
 })
 
-// 计算画布样式 - 等比缩放+居中定位
+// 容器背景样式 - 铺满全屏，不受画布缩放影响
+const containerStyle = computed(() => ({
+  backgroundColor: props.config.canvas.backgroundImage
+    ? undefined
+    : (props.config.canvas.backgroundColor || '#0a192f'),
+  backgroundImage: props.config.canvas.backgroundImage
+    ? `url(${props.config.canvas.backgroundImage})`
+    : undefined,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+}))
+
+// 计算画布样式 - 等比缩放+居中定位（不含背景）
 const canvasStyle = computed(() => ({
   position: 'absolute',
   left: '50%',
@@ -49,10 +61,6 @@ const canvasStyle = computed(() => ({
   transformOrigin: 'center center',
   width: `${props.config.canvas.width}px`,
   height: `${props.config.canvas.height}px`,
-  backgroundColor: props.config.canvas.backgroundColor,
-  backgroundImage: props.config.canvas.backgroundImage
-    ? `url(${props.config.canvas.backgroundImage})`
-    : undefined,
 }))
 
 // 排序后的组件列表
@@ -182,7 +190,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="template-renderer relative overflow-hidden w-full h-full">
+  <div ref="containerRef" class="template-renderer relative overflow-hidden w-full h-full" :style="containerStyle">
     <!-- 加载中 -->
     <div v-if="data.loading.value" class="absolute inset-0 flex items-center justify-center text-[#8892a0] text-sm">
       加载数据中...

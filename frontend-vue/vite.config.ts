@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
+
+// 从项目根目录 VERSION 文件读取版本号
+const appVersion = readFileSync(resolve(__dirname, '..', 'VERSION'), 'utf-8').trim()
 
 export default defineConfig({
   plugins: [vue()],
@@ -8,6 +12,9 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   base: './',
   build: {

@@ -9,6 +9,7 @@ import { parseTemplateConfig, type TemplateConfig } from './types/template-edito
 import GeneralTemplate from './components/large-screen/templates/GeneralTemplate.vue'
 import MinimalTemplate from './components/large-screen/templates/MinimalTemplate.vue'
 import StandardTemplate from './components/large-screen/templates/StandardTemplate.vue'
+import VideoTemplate from './components/large-screen/templates/VideoTemplate.vue'
 import TemplateRenderer from './components/large-screen/TemplateRenderer.vue'
 
 const data = useLargeScreenData()
@@ -20,7 +21,7 @@ const loadingTemplate = ref(false)
 // 判断是否为内置模板
 const isBuiltinTemplate = computed(() => {
   const tid = data.config.value.templateId
-  return tid === 'tpl-general' || tid === 'tpl-minimal' || tid === 'tpl-standard' || !tid
+  return tid === 'tpl-general' || tid === 'tpl-minimal' || tid === 'tpl-standard' || tid === 'tpl-video' || !tid
 })
 
 const isMinimal = computed(() => data.config.value.templateId === 'tpl-minimal')
@@ -98,6 +99,20 @@ function handleClose() {
     <!-- 内置模板：标准模板 -->
     <StandardTemplate
       v-else-if="isBuiltinTemplate && isStandard"
+      :config="data.config.value"
+      :metrics="data.metrics.value"
+      :hourly-data="data.hourlyData.value"
+      :devices="data.devices.value"
+      :store-logo="data.storeLogo.value"
+      :loading="data.loading.value"
+      :clock-time="data.clockTime.value"
+      :get-label="data.getLabel"
+      @close="handleClose"
+    />
+
+    <!-- 内置模板：视频模板 -->
+    <VideoTemplate
+      v-if="isBuiltinTemplate && data.config.value.templateId === 'tpl-video'"
       :config="data.config.value"
       :metrics="data.metrics.value"
       :hourly-data="data.hourlyData.value"

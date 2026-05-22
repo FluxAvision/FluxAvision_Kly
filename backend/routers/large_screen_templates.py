@@ -9,11 +9,71 @@ DELETE /api/large-screen/templates/{id}     - 删除模板
 POST   /api/large-screen/templates/{id}/duplicate - 复制模板
 """
 import json
+import logging
 from fastapi import APIRouter, Request
 from sqlalchemy.orm import Session
 from database import get_session_factory
 from models import ScreenTemplate
 from utils import success_response, error_response, model_to_dict
+
+logger = logging.getLogger(__name__)
+
+
+# ==================== 内置模板定义 ====================
+
+BUILTIN_TEMPLATE_ID_PREFIX = "tpl-"
+
+BUILTIN_TEMPLATES = [
+    {
+        "id": "tpl-general",
+        "name": "通用模板",
+        "description": "经典左右布局，左侧展示指标卡片，右侧展示实时趋势图",
+        "isSystem": True,
+    },
+    {
+        "id": "tpl-minimal",
+        "name": "简约模板",
+        "description": "极简数据数字展示，适合大字体远距离观看",
+        "isSystem": True,
+    },
+    {
+        "id": "tpl-standard",
+        "name": "标准模板",
+        "description": "居中大数字展示累计客流，适合迎宾场景",
+        "isSystem": True,
+    },
+    {
+        "id": "tpl-video",
+        "name": "视频模板",
+        "description": "左侧展示客流指标（今日进/今日出/当前在场），右侧展示实时视频画面",
+        "isSystem": True,
+    },
+]
+
+
+def seed_builtin_templates():
+    """启动时初始化内置模板（不存在时创建）"""
+    SessionFactory = get_session_factory()
+    with SessionFactory() as session:
+        for tpl in BUILTIN_TEMPLATES:
+            existing = session.query(ScreenTemplate).filter_by(id=tpl["id"]).first()
+            if not existing:
+                template = ScreenTemplate(
+                    id=tpl["id"],
+                    name=tpl["name"],
+                    description=tpl.get("description", ""),
+                    isSystem=True,
+                    isPublished=True,
+                    layout="custom",
+                    templateConfig="{}",
+                    canvasWidth=1920,
+                    canvasHeight=1080,
+                    backgroundColor="#0a192f",
+                    backgroundImage="",
+                )
+                session.add(template)
+        session.commit()
+        logger.info("✓ 内置大屏模板已初始化")
 
 router = APIRouter(prefix="/api/large-screen/templates", tags=["大屏模板"])
 

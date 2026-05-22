@@ -33,6 +33,10 @@ from fastapi.staticfiles import StaticFiles
 from config import API_HOST, API_PORT, CORS_ORIGINS, BASE_DIR, get_static_dir
 from database import init_database
 from utils import error_response
+from version import get_version
+
+# 读取当前版本号
+APP_VERSION = get_version()
 
 # ==================== 日志配置 ====================
 logging.basicConfig(
@@ -49,7 +53,7 @@ async def lifespan(app: FastAPI):
     """应用启动/关闭生命周期管理"""
     # ── 启动 ──
     logger.info("=" * 60)
-    logger.info("  FluxaVision 客流统计系统 v2.0.0")
+    logger.info(f"  FluxaVision 客流统计系统 v{APP_VERSION}")
     logger.info("  数据库加密: SQLite3 + AES-256 字段加密")
     logger.info("  视频流: RTSP → OpenCV MJPEG")
     logger.info("=" * 60)
@@ -65,6 +69,13 @@ async def lifespan(app: FastAPI):
     from stream_manager import stream_manager
     stream_manager.start()
     logger.info("✓ 视频流管理器已启动 (OpenCV MJPEG)")
+
+    # 初始化内置大屏模板
+    try:
+        from routers.large_screen_templates import seed_builtin_templates
+        seed_builtin_templates()
+    except Exception as e:
+        logger.warning(f"○ 内置大屏模板初始化失败: {e}")
 
     # 自动启动所有大华设备的客流采集
     try:
@@ -105,7 +116,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FluxAvision 客流统计系统",
     description="基于 Python FastAPI + SQLite3 + AES-256 字段加密的后端API",
-    version="2.1.0",
+    version=APP_VERSION,
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
@@ -173,7 +184,7 @@ app.include_router(device_push_router)
 # ==================== 健康检查 ====================
 @app.get("/api/health")
 async def health_check():
-    return {"success": True, "message": "FluxaVision 后端运行正常", "version": "2.0.0"}
+    return {"success": True, "message": "FluxaVision 后端运行正常", "version": APP_VERSION}
 
 
 # ==================== 静态前端服务 ====================

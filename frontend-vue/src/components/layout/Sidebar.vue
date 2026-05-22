@@ -9,6 +9,7 @@ import {
   Key,
 } from 'lucide-vue-next'
 import { markRaw, type Component } from 'vue'
+import { APP_VERSION } from '@/lib/version'
 
 defineProps<{
   activePage: string
@@ -100,7 +101,7 @@ const settingsItems: NavItem[] = [
 
     <!-- Version -->
     <div class="px-6 pb-4 flex-shrink-0">
-      <p class="text-xs text-[#8892a0]/50">FluxAvision v2.1.0</p>
+      <p class="text-xs text-[#8892a0]/50">FluxAvision v{{ APP_VERSION }}</p>
     </div>
   </aside>
 </template>

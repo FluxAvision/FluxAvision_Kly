@@ -95,16 +95,22 @@ function resetZoom() {
   zoomLevel.value = 1
 }
 
-// 计算画布样式
-const canvasStyle = computed(() => ({
-  width: `${props.canvasConfig.width}px`,
-  height: `${props.canvasConfig.height}px`,
-  backgroundColor: props.canvasConfig.backgroundColor,
+// 容器背景样式 - 铺满整个编辑面板
+const containerBgStyle = computed(() => ({
+  backgroundColor: props.canvasConfig.backgroundImage
+    ? undefined
+    : (props.canvasConfig.backgroundColor || '#0d1421'),
   backgroundImage: props.canvasConfig.backgroundImage
     ? `url(${props.canvasConfig.backgroundImage})`
     : undefined,
   backgroundSize: 'cover',
   backgroundPosition: 'center',
+}))
+
+// 计算画布样式（不含背景）
+const canvasStyle = computed(() => ({
+  width: `${props.canvasConfig.width}px`,
+  height: `${props.canvasConfig.height}px`,
   transform: `scale(${scale.value})`,
   transformOrigin: 'top left',
 }))
@@ -373,7 +379,8 @@ defineExpose({
 <template>
   <div
     ref="containerRef"
-    class="canvas-panel h-full overflow-auto bg-[#0d1421] relative"
+    class="canvas-panel h-full overflow-auto relative"
+    :style="containerBgStyle"
     @wheel="handleWheel"
   >
     <!-- 缩放控制 -->

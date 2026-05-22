@@ -7,6 +7,7 @@ export interface LargeScreenConfig {
   title: string
   subtitle: string
   backgroundImage: string
+  backgroundColor: string
   metrics: string[]
   deviceIds: string[]
   templateId: string
@@ -50,6 +51,7 @@ export function useLargeScreenData() {
     title: '客流统计大屏',
     subtitle: '实时客流数据展示',
     backgroundImage: '',
+    backgroundColor: '',
     metrics: ['todayIn', 'todayOut', 'currentIn'],
     deviceIds: [],
     templateId: '',
@@ -103,6 +105,7 @@ export function useLargeScreenData() {
           title: screenData.title || '客流统计大屏',
           subtitle: screenData.subtitle || '实时客流数据展示',
           backgroundImage: screenData.backgroundImage || '',
+          backgroundColor: screenData.backgroundColor || '',
           metrics: screenData.metrics ? screenData.metrics.split(',') : ['todayIn', 'todayOut', 'currentIn'],
           deviceIds: screenData.deviceIds ? screenData.deviceIds.split(',').filter(Boolean) : [],
           templateId: screenData.templateId || '',

@@ -107,6 +107,22 @@ def _migrate_database(engine):
             if col_name not in template_cols:
                 migrations.append(f"ALTER TABLE screen_templates ADD COLUMN {col_name} {col_def}")
 
+        # large_screen_settings 表迁移
+        try:
+            ls_cols = {col["name"] for col in inspector.get_columns("large_screen_settings")}
+        except Exception:
+            ls_cols = set()
+        if "backgroundColor" not in ls_cols:
+            migrations.append("ALTER TABLE large_screen_settings ADD COLUMN backgroundColor VARCHAR(20) DEFAULT ''")
+
+        # large_screen_settings 表迁移
+        try:
+            ls_cols = {col["name"] for col in inspector.get_columns("large_screen_settings")}
+        except Exception:
+            ls_cols = set()
+        if "backgroundColor" not in ls_cols:
+            migrations.append("ALTER TABLE large_screen_settings ADD COLUMN backgroundColor VARCHAR(20) DEFAULT ''")
+
         # traffic_records 表迁移（相机推送新增字段）
         try:
             traffic_records_cols = {col["name"] for col in inspector.get_columns("traffic_records")}

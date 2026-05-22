@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { Shield, KeyRound, ArrowRight, Loader2, Copy, Check } from 'lucide-vue-next'
 import { message } from 'ant-design-vue'
+import { APP_VERSION } from '@/lib/version'
 
 const props = defineProps<{
   hasPassword: boolean
@@ -177,7 +178,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
       <!-- Footer -->
       <p class="text-center text-xs text-[#8892a0]/50 mt-6">
-        FluxaVision v2.1.0 · 客流统计系统
+        FluxaVision v{{ APP_VERSION }} · 客流统计系统
       </p>
     </div>
   </div>

@@ -169,6 +169,7 @@ class LargeScreenSettings(Base):
     subtitle        = Column(String(200), default="实时客流数据展示", comment="大屏副标题")
     logo            = Column(String(500), default="", comment="大屏LOGO")
     backgroundImage = Column(String(500), default="", comment="大屏背景图")
+    backgroundColor = Column(String(20), default="", comment="背景色, 如 #0a192f")
     metrics         = Column(String(200), default="todayIn,todayOut,currentIn", comment="大屏数据指标(逗号分隔)")
     deviceIds       = Column(String(500), default="", comment="大屏显示的设备ID(逗号分隔)")
     templateId      = Column(String(36), default="", comment="模板ID(可随时更换)")

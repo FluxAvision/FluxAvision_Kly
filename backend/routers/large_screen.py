@@ -69,6 +69,8 @@ async def update_large_screen_settings(request: Request):
                 settings.logo = body["logo"]
             if "backgroundImage" in body:
                 settings.backgroundImage = body["backgroundImage"]
+            if "backgroundColor" in body:
+                settings.backgroundColor = body["backgroundColor"]
             if "metrics" in body:
                 settings.metrics = body["metrics"]
             if "deviceIds" in body:

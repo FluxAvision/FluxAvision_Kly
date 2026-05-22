@@ -17,6 +17,7 @@ interface LargeScreenConfig {
   title: string
   subtitle: string
   backgroundImage: string
+  backgroundColor: string
   metrics: string[]
   deviceIds: string[]
   templateId: string
@@ -43,6 +44,7 @@ const DEFAULT_CONFIG: LargeScreenConfig = {
   title: '客流统计大屏',
   subtitle: '实时客流数据展示',
   backgroundImage: '',
+  backgroundColor: '',
   metrics: ['todayIn', 'todayOut', 'currentIn'],
   deviceIds: [],
   templateId: '',
@@ -56,6 +58,7 @@ const builtinTemplates = [
   { id: 'tpl-general', name: '通用模板', color: '#4a9eff', desc: '居中层级布局，大数字计数器 + 分栏指标卡片', isBuiltin: true },
   { id: 'tpl-minimal', name: '简约模板', color: '#3b82f6', desc: '网格结构布局，中心面板 + 四角指标面板', isBuiltin: true },
   { id: 'tpl-standard', name: '标准模板', color: '#ef4444', desc: '欢迎大字标题 + 累计来访数字翻牌 + 当日、本月、全年统计', isBuiltin: true },
+  { id: 'tpl-video', name: '视频模板', color: '#00d9ff', desc: '左侧客流指标（今日进/今日出/当前在场），右侧实时视频画面', isBuiltin: true },
 ]
 
 const metricOptions = [
@@ -111,6 +114,7 @@ async function fetchAll() {
         title: data.title || DEFAULT_CONFIG.title,
         subtitle: data.subtitle || DEFAULT_CONFIG.subtitle,
         backgroundImage: data.backgroundImage || '',
+        backgroundColor: data.backgroundColor || '',
         metrics: data.metrics ? data.metrics.split(',').filter(Boolean) : [...DEFAULT_CONFIG.metrics],
         deviceIds: data.deviceIds ? data.deviceIds.split(',').filter(Boolean) : [],
         templateId: data.templateId || '',
@@ -125,7 +129,8 @@ async function fetchAll() {
 
     if (templatesRes.ok) {
       const json = await templatesRes.json()
-      templates.value = json.data || []
+      // 过滤掉系统模板（内置模板已在前端硬编码，避免重复显示）
+      templates.value = (json.data || []).filter((t: any) => !t.isSystem)
     }
   } catch {
     message.error('加载大屏配置失败')
@@ -139,11 +144,42 @@ function handleFileUpload(event: Event) {
   const file = target.files?.[0]
   if (!file) return
 
+  // 上传图片时清除背景色（二选一）
+  config.value.backgroundColor = ''
+
   const reader = new FileReader()
   reader.onload = (e) => {
     config.value.backgroundImage = e.target?.result as string
   }
   reader.readAsDataURL(file)
+}
+
+function onColorChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  // 选颜色时清除背景图（二选一）
+  config.value.backgroundImage = ''
+  config.value.backgroundColor = target.value
+}
+
+function onColorTextChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  let val = target.value.trim()
+  if (!val) {
+    config.value.backgroundColor = ''
+    return
+  }
+  // 自动补 #
+  if (!val.startsWith('#')) {
+    val = '#' + val
+  }
+  // 选颜色时清除背景图（二选一）
+  config.value.backgroundImage = ''
+  config.value.backgroundColor = val
+}
+
+function clearBackground() {
+  config.value.backgroundImage = ''
+  config.value.backgroundColor = ''
 }
 
 function handleDeviceToggle(deviceId: string) {
@@ -180,6 +216,7 @@ async function handleSave() {
         title: config.value.title,
         subtitle: config.value.subtitle,
         backgroundImage: config.value.backgroundImage,
+        backgroundColor: config.value.backgroundColor,
         metrics: config.value.metrics.join(','),
         deviceIds: config.value.deviceIds.join(','),
         templateId: config.value.templateId,
@@ -376,35 +413,61 @@ onMounted(() => {
             </div>
 
 
-            <!-- Background Image -->
-            <div class="flex items-center gap-4">
-              <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">背景图片</label>
-              <div class="flex items-center gap-3 flex-1">
-                <div class="w-16 h-10 rounded-lg bg-[#0a192f] border border-[#1e293b] flex items-center justify-center overflow-hidden">
-                  <img v-if="config.backgroundImage" :src="config.backgroundImage" alt="Background" class="w-full h-full object-cover" />
-                  <Monitor v-else class="w-5 h-5 text-[#8892a0]" />
+            <!-- Background (二选一: 颜色或图片) -->
+            <div class="flex items-start gap-4">
+              <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right pt-1">背景</label>
+              <div class="flex-1 space-y-3">
+                <!-- 预览区 -->
+                <div class="w-full h-20 rounded-lg border border-[#1e293b] flex items-center justify-center overflow-hidden"
+                  :style="{
+                    backgroundColor: config.backgroundImage ? 'transparent' : (config.backgroundColor || '#0a192f'),
+                    backgroundImage: config.backgroundImage ? `url(${config.backgroundImage})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }">
+                  <span v-if="!config.backgroundImage && !config.backgroundColor" class="text-xs text-[#8892a0]">无背景</span>
+                  <span v-else-if="config.backgroundColor && !config.backgroundImage" class="text-xs text-white/50">{{ config.backgroundColor }}</span>
                 </div>
-                <button
-                  class="flex items-center gap-2 px-3 py-2 bg-[#0a192f] border border-[#1e293b] rounded-md text-sm text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer"
-                  @click="bgInputRef?.click()"
-                >
-                  <Upload class="w-4 h-4" />
-                  上传背景
-                </button>
-                <button
-                  v-if="config.backgroundImage"
-                  class="px-3 py-2 text-sm text-[#ef4444] hover:text-[#ef4444]/80 transition-colors cursor-pointer"
-                  @click="config.backgroundImage = ''"
-                >
-                  移除
-                </button>
-                <input
-                  ref="bgInputRef"
-                  type="file"
-                  accept="image/*"
-                  class="hidden"
-                  @change="handleFileUpload"
-                />
+                <!-- 操作行 -->
+                <div class="flex items-center gap-3 flex-wrap">
+                  <!-- 颜色选择器 -->
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="color"
+                      :value="config.backgroundColor || '#0a192f'"
+                      @input="onColorChange"
+                      class="w-8 h-8 rounded cursor-pointer border border-[#1e293b] bg-transparent"
+                    />
+                    <input
+                      :value="config.backgroundColor"
+                      @input="onColorTextChange"
+                      placeholder="#0a192f"
+                      class="w-24 bg-[#0a192f] border border-[#1e293b] rounded-md px-2 py-1.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors font-mono"
+                    />
+                  </div>
+                  <span class="text-[#8892a0]">或</span>
+                  <button
+                    class="flex items-center gap-2 px-3 py-1.5 bg-[#0a192f] border border-[#1e293b] rounded-md text-sm text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer"
+                    @click="bgInputRef?.click()"
+                  >
+                    <Upload class="w-4 h-4" />
+                    上传图片
+                  </button>
+                  <button
+                    v-if="config.backgroundImage || config.backgroundColor"
+                    class="px-3 py-1.5 text-sm text-[#ef4444] hover:text-[#ef4444]/80 transition-colors cursor-pointer"
+                    @click="clearBackground"
+                  >
+                    清除
+                  </button>
+                  <input
+                    ref="bgInputRef"
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="handleFileUpload"
+                  />
+                </div>
               </div>
             </div>
 

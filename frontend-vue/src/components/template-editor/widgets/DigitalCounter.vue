@@ -26,7 +26,7 @@ const value = computed(() => {
       class="px-6 py-2 rounded-full"
       style="background: rgba(74, 158, 255, 0.1); border: 1px solid rgba(74, 158, 255, 0.3);"
     >
-      <span class="text-base text-white font-medium">{{ title }}</span>
+      <span class="text-base text-white font-medium" :style="config.styles?.fontSize ? { fontSize: config.styles.fontSize + 'px' } : undefined">{{ title }}</span>
     </div>
 
     <!-- 数字计数器 -->
@@ -34,7 +34,7 @@ const value = computed(() => {
       <div
         v-for="(digit, idx) in value"
         :key="idx"
-        class="w-12 h-16 flex items-center justify-center rounded-lg text-3xl font-bold text-white"
+        class="w-12 h-16 flex items-center justify-center rounded-lg text-3xl font-bold text-white" :style="config.styles?.fontSize ? { fontSize: config.styles.fontSize + 'px', width: (config.styles.fontSize * 1.2) + 'px', height: (config.styles.fontSize * 1.6) + 'px' } : undefined"
         style="background: rgba(10, 26, 58, 0.8); border: 1px solid rgba(74, 158, 255, 0.4); box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 10px rgba(74, 158, 255, 0.1);"
       >
         {{ digit }}

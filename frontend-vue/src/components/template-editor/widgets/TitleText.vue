@@ -14,6 +14,15 @@ const isTitle = computed(() => props.config.type === 'title')
 const text = computed(() => props.config.props?.text || props.config.name)
 const level = computed(() => props.config.props?.level || 1)
 const fontSize = computed(() => {
+  // 优先使用 styles.fontSize（属性面板"文本样式→字体大小"设置）
+  if (props.config.styles?.fontSize) {
+    return props.config.styles.fontSize + 'px'
+  }
+  // 后备：props.fontSize
+  if (props.config.props?.fontSize) {
+    return props.config.props.fontSize + 'px'
+  }
+  // 默认：标题按 level，文本 14px
   if (isTitle.value) {
     switch (level.value) {
       case 1: return '2rem'
@@ -22,7 +31,7 @@ const fontSize = computed(() => {
       default: return '1.5rem'
     }
   }
-  return `${props.config.props?.fontSize || 14}px`
+  return '14px'
 })
 const fontWeight = computed(() => isTitle.value ? 'bold' : 'normal')
 const textAlign = computed(() => props.config.props?.textAlign || 'center')

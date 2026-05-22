@@ -42,7 +42,7 @@ const cardColor = computed(() => {
       class="h-7 flex items-center justify-center"
       :style="{ background: `linear-gradient(90deg, ${cardColor}40, ${cardColor}15, ${cardColor}40)` }"
     >
-      <span class="text-sm text-white/80 font-medium">{{ title }}</span>
+      <span class="text-sm text-white/80 font-medium" :style="config.styles?.fontSize ? { fontSize: config.styles.fontSize + 'px' } : undefined">{{ title }}</span>
     </div>
 
     <!-- 内容区域 -->
@@ -54,10 +54,16 @@ const cardColor = computed(() => {
       </svg>
 
       <!-- 数值 -->
-      <p class="text-4xl font-bold text-white" :style="{ textShadow: `0 0 20px ${cardColor}80` }">
+      <p
+        class="text-4xl font-bold text-white"
+        :style="[
+          { textShadow: `0 0 20px ${cardColor}80` },
+          config.styles?.fontSize ? { fontSize: config.styles.fontSize + 'px' } : {},
+        ]"
+      >
         {{ value.toLocaleString() }}
       </p>
-      <p class="text-sm text-white/50 mt-1">人</p>
+      <p class="text-sm text-white/50 mt-1" :style="config.styles?.fontSize ? { fontSize: Math.round(config.styles.fontSize * 0.5) + 'px' } : undefined">人</p>
     </div>
   </div>
 </template>
