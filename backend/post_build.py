@@ -13,6 +13,7 @@ import subprocess
 import shutil
 
 DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "FluxaVision")
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def patch_elf_execstack(lib_path: str) -> bool:
@@ -118,6 +119,13 @@ def main():
         sys.exit(1)
 
     patch_all_libraries()
+
+    # 复制 VERSION 文件到 exe 同级目录（供 version.py 运行时读取）
+    version_src = os.path.join(PROJECT_DIR, "VERSION")
+    version_dst = os.path.join(DIST_DIR, "VERSION")
+    if os.path.exists(version_src):
+        shutil.copy2(version_src, version_dst)
+        print(f" VERSION 文件已复制到: {version_dst}")
 
     # 打印输出大小
     total_size = 0

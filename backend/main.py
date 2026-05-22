@@ -88,8 +88,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"○ 大华SDK启动失败: {e}")
 
-    # 挂载静态文件
-    has_static = _mount_static_files()
+    # 静态前端文件已在模块加载时挂载（_mount_static_files 在模块级别调用），
+    # 这里只输出状态信息
+    has_static = static_dir is not None
     if has_static:
         logger.info(f"✓ 静态前端已挂载: http://{API_HOST}:{API_PORT}")
     else:
@@ -188,16 +189,28 @@ async def health_check():
 
 
 # ==================== 静态前端服务 ====================
+
+# 模块级变量：记录静态文件目录，在 lifespan 中用于日志输出
+static_dir: str | None = None
+
+
 def _mount_static_files():
     """
     挂载静态前端文件。
 
+    **重要**: 此函数在模块加载时执行，不在 lifespan 中执行。
+    在 lifespan 中注册路由有时序风险（某些 ASGI 环境/打包环境
+    可能不触发 lifespan：即使触发，路由注册时机也可能导致
+    SPA catch-all 优先于特定路径匹配）。
+
     打包模式（exe）: 从 PyInstaller 打包的 static/ 目录提供前端文件
     开发模式: 不挂载，由 Next.js dev server 提供前端
     """
+    global static_dir
     static_dir = get_static_dir()
     if not static_dir or not os.path.isdir(static_dir):
         logger.info("未找到静态前端文件，运行纯API模式（开发模式）")
+        static_dir = None
         return False
 
     logger.info(f"挂载静态前端文件: {static_dir}")
@@ -235,16 +248,37 @@ def _mount_static_files():
 
             break
 
-    # SPA fallback
+    # 大屏入口页面（必须在 SPA fallback 之前注册，否则被 catch-all 捕获）
+    large_screen_html_path = os.path.join(static_dir, "large-screen.html")
+    if os.path.exists(large_screen_html_path):
+        @app.get("/large-screen.html")
+        async def large_screen_page():
+            return FileResponse(large_screen_html_path)
+
+    # SPA fallback — 必须放在所有已知路径之后
+    # 注意: 即使 @app.get("/large-screen.html") 已在其之前注册，
+    # 仍需在 catch-all 中兜底检查 static_dir 中存在的 .html 文件。
+    # 这是因为某些运行环境（如 PyInstaller exe）可能在路由动态注册时机上
+    # 有细微差异，兜底逻辑确保万无一失。
     index_html_path = os.path.join(static_dir, "index.html")
     if os.path.exists(index_html_path):
         @app.get("/{path:path}")
         async def spa_catch_all(request: Request, path: str):
             if path.startswith("api/"):
                 return JSONResponse(status_code=404, content={"success": False, "message": "API not found"})
+            # 防御性检查：如果 static_dir 中存在同名的 .html 文件，直接提供
+            # （兜底保障，防止某些情况下特定路由未注册导致 catch-all 误拦截）
+            if path.endswith(".html") and static_dir:
+                html_file = os.path.join(static_dir, path)
+                if os.path.isfile(html_file) and html_file != index_html_path:
+                    return FileResponse(html_file)
             return FileResponse(index_html_path)
 
     return True
+
+
+# 在模块加载时挂载静态前端路由（不在 lifespan 中执行，详见 _mount_static_files 文档）
+_mount_static_files()
 
 
 # ==================== 直接运行 ====================
