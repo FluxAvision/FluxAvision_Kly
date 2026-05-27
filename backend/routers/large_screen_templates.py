@@ -16,12 +16,10 @@ from sqlalchemy.orm import Session
 from database import get_session_factory
 from models import ScreenTemplate
 from utils import success_response, error_response, model_to_dict
-import os
+from .seed_data_embedded import get_seed_templates
 
-# 加载种子模板数据
-_seed_path = os.path.join(os.path.dirname(__file__), "seed_data.json")
-with open(_seed_path, "r", encoding="utf-8") as _f:
-    SEED_TEMPLATES = json.load(_f)
+# 种子模板数据（嵌入在 Python 中，避免打包后找不到文件）
+SEED_TEMPLATES = get_seed_templates()
 
 logger = logging.getLogger(__name__)
 

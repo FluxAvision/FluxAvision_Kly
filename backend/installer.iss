@@ -6,7 +6,7 @@
 ; ============================================================
 
 #define MyAppName "FluxAvision 客流统计系统"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "FluxAvision"
 #define MyAppURL "http://127.0.0.1:15678"
 #define MyAppExeName "FluxaVision.exe"
