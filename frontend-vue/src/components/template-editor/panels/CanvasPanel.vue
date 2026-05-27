@@ -202,7 +202,10 @@ function getComponentStyle(comp: ComponentConfig) {
 
   if (comp.styles) {
     const s: ComponentStyles = comp.styles
-    if (s.backgroundColor) style.backgroundColor = s.backgroundColor
+    // border 类型组件的背景色由 DataV BorderBox 原生 props 处理，避免双重背景
+    if (comp.type !== 'border') {
+      if (s.backgroundColor) style.backgroundColor = s.backgroundColor
+    }
     if (s.borderColor) style.borderColor = s.borderColor
     if (s.borderWidth) style.borderWidth = `${s.borderWidth}px`
     if (s.borderRadius) style.borderRadius = `${s.borderRadius}px`

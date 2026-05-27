@@ -8,7 +8,7 @@ import Dashboard from '@/components/dashboard/Dashboard.vue'
 import DeviceManagement from '@/components/devices/DeviceManagement.vue'
 import HistoryData from '@/components/history/HistoryData.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
-import LargeScreenSettings from '@/components/settings/LargeScreenSettings.vue'
+import LargeScreenList from '@/components/large-screen/LargeScreenList.vue'
 import LicenseSettings from '@/components/settings/LicenseSettings.vue'
 import LoginPage from '@/components/auth/LoginPage.vue'
 
@@ -203,7 +203,7 @@ onMounted(() => {
           <DeviceManagement v-else-if="currentPage === 'devices'" />
           <HistoryData v-else-if="currentPage === 'history'" />
           <SystemSettings v-else-if="currentPage === 'settings'" />
-          <LargeScreenSettings v-else-if="currentPage === 'large-screen-settings'" />
+          <LargeScreenList v-else-if="currentPage === 'large-screen-settings'" />
           <LicenseSettings v-else-if="currentPage === 'license-settings'" />
         </main>
       </div>

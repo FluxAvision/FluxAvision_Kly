@@ -2,7 +2,7 @@
 /**
  * 模板渲染引擎
  * 根据 JSON 配置动态渲染模板组件
- * 大屏模式：画布100%平铺满整个浏览器（拉伸填满，不保持比例）
+ * 大屏模式：画布100%平铺满整个浏览器，左右不留白（取宽高最大值缩放），超出部分裁剪
  */
 import { computed, defineAsyncComponent, ref, onMounted, onUnmounted } from 'vue'
 import type { TemplateConfig, ComponentConfig, ComponentStyles } from '@/types/template-editor'
@@ -20,6 +20,9 @@ const componentMap: Record<string, any> = {
   'title': defineAsyncComponent(() => import('@/components/template-editor/widgets/TitleText.vue')),
   'text': defineAsyncComponent(() => import('@/components/template-editor/widgets/TitleText.vue')),
   'clock': defineAsyncComponent(() => import('@/components/template-editor/widgets/ClockWidget.vue')),
+  'logo': defineAsyncComponent(() => import('@/components/template-editor/widgets/LogoImage.vue')),
+  'line': defineAsyncComponent(() => import('@/components/template-editor/widgets/LineShape.vue')),
+  'ranking-counter': defineAsyncComponent(() => import('@/components/template-editor/widgets/RankingCounter.vue')),
 }
 
 const props = defineProps<{
@@ -32,12 +35,12 @@ const data = useLargeScreenData()
 const containerRef = ref<HTMLElement | null>(null)
 const containerSize = ref({ width: 0, height: 0 })
 
-// 缩放比例 - 等比缩放（取最小值，确保内容完整显示）
+// 缩放比例 - 取最大值铺满（左右不留白），超出部分 overflow hidden 裁剪
 const scale = computed(() => {
   if (containerSize.value.width === 0 || containerSize.value.height === 0) return 1
   const sx = containerSize.value.width / props.config.canvas.width
   const sy = containerSize.value.height / props.config.canvas.height
-  return Math.min(sx, sy)
+  return Math.max(sx, sy)
 })
 
 // 容器背景样式 - 铺满全屏，不受画布缩放影响
@@ -52,13 +55,13 @@ const containerStyle = computed(() => ({
   backgroundPosition: 'center',
 }))
 
-// 计算画布样式 - 等比缩放+居中定位（不含背景）
+// 计算画布样式 - 等比缩放+顶部对齐（优先保证顶部内容可见）
 const canvasStyle = computed(() => ({
   position: 'absolute',
   left: '50%',
-  top: '50%',
-  transform: `translate(-50%, -50%) scale(${scale.value})`,
-  transformOrigin: 'center center',
+  top: 0,
+  transform: `translate(-50%, 0) scale(${scale.value})`,
+  transformOrigin: 'top center',
   width: `${props.config.canvas.width}px`,
   height: `${props.config.canvas.height}px`,
 }))
@@ -77,8 +80,7 @@ const componentDataMap = computed(() => {
   for (const comp of sortedComponents.value) {
     // 如果没有 dataSource 或 dataSource 为空对象，根据组件类型提供默认数据
     if (!comp.dataSource || Object.keys(comp.dataSource).length === 0) {
-      if (comp.type === 'metric-card' || comp.type === 'counter') {
-        // 默认绑定第一个指标
+      if (comp.type === 'metric-card' || comp.type === 'counter' || comp.type === 'ranking-counter') {
         map[comp.id] = {
           value: data.metrics.value['todayIn'] || 0,
           label: data.getLabel('todayIn'),
@@ -93,9 +95,7 @@ const componentDataMap = computed(() => {
 
     const { type, key } = comp.dataSource
 
-    // 如果 type 缺失但有 key，根据 key 推断类型
     if (!type && key) {
-      // 如果 key 是指标名称，则类型为 metric
       const metricKeys = ['todayIn', 'todayOut', 'currentIn', 'weekIn', 'weekOut', 'monthIn', 'monthOut', 'totalIn', 'totalOut']
       if (metricKeys.includes(key)) {
         map[comp.id] = {
@@ -120,8 +120,7 @@ const componentDataMap = computed(() => {
         map[comp.id] = { hourlyData: data.hourlyData.value }
         break
       default:
-        // 默认处理：如果组件类型是指标相关，尝试使用 key 获取数据
-        if ((comp.type === 'metric-card' || comp.type === 'counter') && key) {
+        if ((comp.type === 'metric-card' || comp.type === 'counter' || comp.type === 'ranking-counter') && key) {
           map[comp.id] = {
             value: data.metrics.value[key] || 0,
             label: data.getLabel(key),
@@ -155,7 +154,6 @@ function getComponentStyle(comp: ComponentConfig) {
     transform: `rotate(${comp.rotation}deg)`,
   }
 
-  // 合并自定义样式
   if (comp.styles) {
     const s: ComponentStyles = comp.styles
     if (s.backgroundColor) style.backgroundColor = s.backgroundColor

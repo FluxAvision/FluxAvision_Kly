@@ -1,67 +1,60 @@
 <script setup lang="ts">
 /**
  * 大屏展示页面根组件
- * 关闭按钮直接关闭窗口
+ * 从 localStorage 读取默认模板ID，动态加载并渲染
  */
-import { computed, ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useLargeScreenData } from './components/large-screen/composables/useLargeScreenData'
 import { parseTemplateConfig, type TemplateConfig } from './types/template-editor'
-import GeneralTemplate from './components/large-screen/templates/GeneralTemplate.vue'
-import MinimalTemplate from './components/large-screen/templates/MinimalTemplate.vue'
-import StandardTemplate from './components/large-screen/templates/StandardTemplate.vue'
-import VideoTemplate from './components/large-screen/templates/VideoTemplate.vue'
 import TemplateRenderer from './components/large-screen/TemplateRenderer.vue'
 
 const data = useLargeScreenData()
 
-// 自定义模板配置
-const customTemplateConfig = ref<TemplateConfig | null>(null)
-const loadingTemplate = ref(false)
+const templateConfig = ref<TemplateConfig | null>(null)
+const loading = ref(true)
+const error = ref('')
 
-// 判断是否为内置模板
-const isBuiltinTemplate = computed(() => {
-  const tid = data.config.value.templateId
-  return tid === 'tpl-general' || tid === 'tpl-minimal' || tid === 'tpl-standard' || tid === 'tpl-video' || !tid
-})
+// 判断是否为预览模式：URL参数 ?templateId=xxx 优先，其次 localStorage
+const urlParams = new URLSearchParams(window.location.search)
+const urlTemplateId = urlParams.get('templateId')
+const isPreview = !!urlTemplateId || !!localStorage.getItem('previewTemplateId')
 
-const isMinimal = computed(() => data.config.value.templateId === 'tpl-minimal')
-const isStandard = computed(() => data.config.value.templateId === 'tpl-standard')
+async function loadTemplate() {
+  loading.value = true
+  error.value = ''
 
-// 加载自定义模板
-async function loadCustomTemplate() {
-  const tid = data.config.value.templateId
-  if (!tid || isBuiltinTemplate.value) {
-    customTemplateConfig.value = null
+  // 优先使用 URL 参数（预览/设计师预览），其次 localStorage（大屏模式）
+  const tid = urlTemplateId || localStorage.getItem('previewTemplateId') || localStorage.getItem('defaultTemplateId')
+
+  if (!tid) {
+    error.value = '未设置默认模板'
+    loading.value = false
     return
   }
 
-  loadingTemplate.value = true
   try {
     const res = await fetch(`/api/large-screen/templates/${tid}`)
     if (res.ok) {
       const json = await res.json()
       const templateData = json.data || json
-      customTemplateConfig.value = parseTemplateConfig(templateData.templateConfig)
+      templateConfig.value = parseTemplateConfig(templateData.templateConfig)
+    } else {
+      error.value = '模板不存在'
     }
   } catch {
-    customTemplateConfig.value = null
+    error.value = '加载失败'
   } finally {
-    loadingTemplate.value = false
+    loading.value = false
   }
 }
 
-// 监听模板ID变化
-watch(() => data.config.value.templateId, loadCustomTemplate, { immediate: true })
-
-// 等待数据加载
 onMounted(() => {
-  setTimeout(loadCustomTemplate, 500)
+  setTimeout(loadTemplate, 500)
 })
 
 // 关闭窗口
 function handleClose() {
   window.close()
-  // 如果 window.close() 被浏览器阻止，提示用户手动关闭
   setTimeout(() => {
     alert('请手动关闭此页面')
   }, 100)
@@ -69,10 +62,7 @@ function handleClose() {
 </script>
 
 <template>
-  <div
-    class="w-full h-screen overflow-hidden"
-    :class="isMinimal ? 'bg-[#0a192f]' : 'bg-[#0a1a3a]'"
-  >
+  <div class="w-full h-screen overflow-hidden bg-[#0a192f]">
     <!-- 背景图片覆盖 -->
     <div
       v-if="data.config.value.backgroundImage"
@@ -81,81 +71,34 @@ function handleClose() {
     />
     <div v-if="data.config.value.backgroundImage" class="absolute inset-0 bg-black/30" />
 
-    <!-- 内置模板：简约模板 -->
-    <MinimalTemplate
-      v-if="isBuiltinTemplate && isMinimal"
-      :config="data.config.value"
-      :metrics="data.metrics.value"
-      :hourly-data="data.hourlyData.value"
-      :devices="data.devices.value"
-      :store-logo="data.storeLogo.value"
-      :loading="data.loading.value"
-      :clock-time="data.clockTime.value"
-      :get-label="data.getLabel"
-      @close="handleClose"
-      @refresh="data.fetchData()"
-    />
+    <!-- 加载中 -->
+    <div v-if="loading" class="w-full h-full flex items-center justify-center text-[#8892a0] text-sm">
+      加载模板中...
+    </div>
 
-    <!-- 内置模板：标准模板 -->
-    <StandardTemplate
-      v-else-if="isBuiltinTemplate && isStandard"
-      :config="data.config.value"
-      :metrics="data.metrics.value"
-      :hourly-data="data.hourlyData.value"
-      :devices="data.devices.value"
-      :store-logo="data.storeLogo.value"
-      :loading="data.loading.value"
-      :clock-time="data.clockTime.value"
-      :get-label="data.getLabel"
-      @close="handleClose"
-    />
-
-    <!-- 内置模板：视频模板 -->
-    <VideoTemplate
-      v-if="isBuiltinTemplate && data.config.value.templateId === 'tpl-video'"
-      :config="data.config.value"
-      :metrics="data.metrics.value"
-      :hourly-data="data.hourlyData.value"
-      :devices="data.devices.value"
-      :store-logo="data.storeLogo.value"
-      :loading="data.loading.value"
-      :clock-time="data.clockTime.value"
-      :get-label="data.getLabel"
-      @close="handleClose"
-    />
-
-    <!-- 内置模板：通用模板 -->
-    <GeneralTemplate
-      v-else-if="isBuiltinTemplate && !isMinimal && !isStandard"
-      :config="data.config.value"
-      :metrics="data.metrics.value"
-      :hourly-data="data.hourlyData.value"
-      :devices="data.devices.value"
-      :store-logo="data.storeLogo.value"
-      :loading="data.loading.value"
-      :clock-time="data.clockTime.value"
-      :get-label="data.getLabel"
-      @close="handleClose"
-    />
-
-    <!-- 自定义模板 -->
-    <div v-else-if="customTemplateConfig" class="relative z-10 w-full h-full">
-      <!-- 关闭按钮 -->
+    <!-- 渲染模板 -->
+    <div v-else-if="templateConfig" class="relative z-10 w-full h-full">
+      <!-- 预览提示条 -->
+      <div v-if="isPreview" class="absolute top-0 left-0 right-0 z-50 h-10 bg-[#00d9ff]/10 border-b border-[#00d9ff]/30 flex items-center justify-center gap-2">
+        <span class="text-xs text-[#00d9ff]">预览模式</span>
+        <span class="text-xs text-[#5a6a80]">·</span>
+        <span class="text-xs text-[#8892a0]">点击关闭按钮退出预览</span>
+      </div>
       <button
         class="absolute top-4 right-4 z-50 w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+        :class="isPreview ? 'top-12' : 'top-4'"
         @click="handleClose"
       >
         <span class="text-xl">×</span>
       </button>
-
-      <!-- 模板渲染器 -->
-      <TemplateRenderer :config="customTemplateConfig" />
+      <div :class="isPreview ? 'pt-10' : ''" class="w-full h-full">
+        <TemplateRenderer :config="templateConfig" />
+      </div>
     </div>
 
-    <!-- 加载中 -->
-    <div v-else class="w-full h-full flex items-center justify-center text-white">
-      <div v-if="loadingTemplate" class="text-[#8892a0]">加载模板中...</div>
-      <div v-else class="text-[#8892a0]">模板不存在或加载失败</div>
+    <!-- 异常 -->
+    <div v-else class="w-full h-full flex items-center justify-center text-[#8892a0] text-sm">
+      {{ error || '加载失败' }}
     </div>
   </div>
 </template>

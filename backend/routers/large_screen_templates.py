@@ -10,70 +10,56 @@ POST   /api/large-screen/templates/{id}/duplicate - 复制模板
 """
 import json
 import logging
+import uuid
 from fastapi import APIRouter, Request
 from sqlalchemy.orm import Session
 from database import get_session_factory
 from models import ScreenTemplate
 from utils import success_response, error_response, model_to_dict
+import os
+
+# 加载种子模板数据
+_seed_path = os.path.join(os.path.dirname(__file__), "seed_data.json")
+with open(_seed_path, "r", encoding="utf-8") as _f:
+    SEED_TEMPLATES = json.load(_f)
 
 logger = logging.getLogger(__name__)
 
 
-# ==================== 内置模板定义 ====================
+# ==================== 预置模板 ====================
 
-BUILTIN_TEMPLATE_ID_PREFIX = "tpl-"
-
-BUILTIN_TEMPLATES = [
-    {
-        "id": "tpl-general",
-        "name": "通用模板",
-        "description": "经典左右布局，左侧展示指标卡片，右侧展示实时趋势图",
-        "isSystem": True,
-    },
-    {
-        "id": "tpl-minimal",
-        "name": "简约模板",
-        "description": "极简数据数字展示，适合大字体远距离观看",
-        "isSystem": True,
-    },
-    {
-        "id": "tpl-standard",
-        "name": "标准模板",
-        "description": "居中大数字展示累计客流，适合迎宾场景",
-        "isSystem": True,
-    },
-    {
-        "id": "tpl-video",
-        "name": "视频模板",
-        "description": "左侧展示客流指标（今日进/今日出/当前在场），右侧展示实时视频画面",
-        "isSystem": True,
-    },
-]
+BUILTIN_TEMPLATE_NAMES = ["通用模板", "简约模板", "标准模板", "视频模板"]
 
 
 def seed_builtin_templates():
-    """启动时初始化内置模板（不存在时创建）"""
+    """启动时初始化预置模板（数据库为空时创建4个默认模板）"""
+    from sqlalchemy import func
     SessionFactory = get_session_factory()
     with SessionFactory() as session:
-        for tpl in BUILTIN_TEMPLATES:
-            existing = session.query(ScreenTemplate).filter_by(id=tpl["id"]).first()
-            if not existing:
-                template = ScreenTemplate(
-                    id=tpl["id"],
-                    name=tpl["name"],
-                    description=tpl.get("description", ""),
-                    isSystem=True,
-                    isPublished=True,
-                    layout="custom",
-                    templateConfig="{}",
-                    canvasWidth=1920,
-                    canvasHeight=1080,
-                    backgroundColor="#0a192f",
-                    backgroundImage="",
-                )
-                session.add(template)
+        count = session.query(func.count(ScreenTemplate.id)).scalar()
+        if count > 0:
+            logger.info(f"大屏模板已存在 ({count} 个)，跳过初始化")
+            return
+
+        for tpl in SEED_TEMPLATES:
+            tid = uuid.uuid4().hex[:30]
+            template = ScreenTemplate(
+                id=tid,
+                name=tpl["name"],
+                description=tpl.get("description", ""),
+                isSystem=False,
+                isPublished=True,
+                layout="custom",
+                templateConfig=json.dumps(tpl["templateConfig"], ensure_ascii=False),
+                canvasWidth=tpl.get("canvasWidth", 1920),
+                canvasHeight=tpl.get("canvasHeight", 1080),
+                backgroundColor=tpl.get("backgroundColor", "#0a192f"),
+                backgroundImage="",
+            )
+            session.add(template)
+
         session.commit()
-        logger.info("✓ 内置大屏模板已初始化")
+        logger.info(f"\u2713 已初始化 {len(SEED_TEMPLATES)} 个默认大屏模板")
 
 router = APIRouter(prefix="/api/large-screen/templates", tags=["大屏模板"])
 
@@ -84,7 +70,6 @@ async def get_templates():
     SessionFactory = get_session_factory()
     with SessionFactory() as session:
         templates = session.query(ScreenTemplate).order_by(
-            ScreenTemplate.isSystem.desc(),
             ScreenTemplate.createdAt.desc()
         ).all()
         return success_response([model_to_dict(t) for t in templates])
@@ -138,9 +123,6 @@ async def update_template(template_id: str, request: Request):
         if not template:
             return error_response("模板不存在", 404)
 
-        if template.isSystem:
-            return error_response("系统模板不可修改", 403)
-
         # 更新字段
         if "name" in body:
             template.name = body["name"]
@@ -176,9 +158,6 @@ async def delete_template(template_id: str):
         template = session.query(ScreenTemplate).filter_by(id=template_id).first()
         if not template:
             return error_response("模板不存在", 404)
-
-        if template.isSystem:
-            return error_response("系统模板不可删除", 403)
 
         session.delete(template)
         session.commit()

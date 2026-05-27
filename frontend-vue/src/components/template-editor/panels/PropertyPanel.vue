@@ -233,6 +233,24 @@ onMounted(() => {
         >
           <option v-for="bt in borderTypes" :key="bt.value" :value="bt.value">{{ bt.label }}</option>
         </select>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">装饰线颜色1</label>
+          <input type="color" :value="component.props?.borderColors?.[0] || '#00d9ff'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateProp('borderColors', [($event.target as HTMLInputElement).value, component.props?.borderColors?.[1] || '#1e3a5f'])" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">装饰线颜色2</label>
+          <input type="color" :value="component.props?.borderColors?.[1] || '#1e3a5f'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateProp('borderColors', [component.props?.borderColors?.[0] || '#00d9ff', ($event.target as HTMLInputElement).value])" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">边框背景色</label>
+          <input type="color" :value="component.styles?.backgroundColor || '#1e3a5f'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateStyle('backgroundColor', ($event.target as HTMLInputElement).value)" />
+        </div>
       </div>
 
       <div v-if="component.type === 'decoration'" class="space-y-2">
@@ -244,6 +262,18 @@ onMounted(() => {
         >
           <option v-for="dt in decorationTypes" :key="dt.value" :value="dt.value">{{ dt.label }}</option>
         </select>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">装饰线颜色1</label>
+          <input type="color" :value="component.props?.decorationColors?.[0] || '#00d9ff'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateProp('decorationColors', [($event.target as HTMLInputElement).value, component.props?.decorationColors?.[1] || '#1e3a5f'])" />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">装饰线颜色2</label>
+          <input type="color" :value="component.props?.decorationColors?.[1] || '#1e3a5f'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateProp('decorationColors', [component.props?.decorationColors?.[0] || '#00d9ff', ($event.target as HTMLInputElement).value])" />
+        </div>
       </div>
 
       <div v-if="component.type === 'metric-card' || component.type === 'counter'" class="space-y-2">
@@ -282,6 +312,73 @@ onMounted(() => {
             @input="(e) => updateStyle('color', ($event.target as HTMLInputElement).value)" />
         </div>
       </div>
+
+      <!-- ── 指标卡片专有属性 ── -->
+      <div v-if="component.type === 'metric-card'" class="space-y-3">
+        <h4 class="text-xs font-medium text-[#8892a0] uppercase tracking-wider">标题样式</h4>
+        <div>
+          <label class="block text-xs text-[#5a6a80] mb-1">标题</label>
+          <input
+            :value="component.props?.title"
+            type="text"
+            class="w-full h-8 rounded-md bg-[#112240] border border-[#1e293b] px-2.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors"
+            @input="(e) => updateProp('title', (e.target as HTMLInputElement).value)"
+          />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-[#5a6a80] mb-1">字体大小</label>
+            <input
+              :value="component.props?.titleFontSize ?? 14"
+              type="number"
+              min="10"
+              max="64"
+              class="w-full h-8 rounded-md bg-[#112240] border border-[#1e293b] px-2.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors"
+              @input="(e) => updateProp('titleFontSize', Number(($event.target as HTMLInputElement).value))"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-[#5a6a80] mb-1">加粗</label>
+            <div class="flex h-8 items-center">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  :checked="component.props?.titleBold ?? false"
+                  class="w-4 h-4 rounded border-[#2d4765] accent-[#00d9ff]"
+                  @change="(e) => updateProp('titleBold', (e.target as HTMLInputElement).checked)"
+                />
+                <span class="text-xs text-white">加粗</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-[#5a6a80] mb-1">对齐方式</label>
+          <select
+            :value="component.props?.titleAlign || 'center'"
+            class="w-full h-8 rounded-md bg-[#112240] border border-[#1e293b] px-2.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors appearance-none cursor-pointer"
+            @change="(e) => updateProp('titleAlign', (e.target as HTMLSelectElement).value)"
+          >
+            <option value="center">居中</option>
+            <option value="left">靠左</option>
+            <option value="right">靠右</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-[#5a6a80] mb-1">标题背景色</label>
+          <div class="flex items-center gap-0 rounded-md border border-[#1e293b] overflow-hidden">
+            <input type="color" :value="component.props?.titleBgColor || '#00d9ff'"
+              @input="(e) => updateProp('titleBgColor', ($event.target as HTMLInputElement).value)"
+              class="w-10 h-8 cursor-pointer border-0 p-0.5 bg-transparent"
+              style="flex-shrink:0;min-width:40px;" />
+            <input :value="component.props?.titleBgColor || ''"
+              @input="(e) => updateProp('titleBgColor', (e.target as HTMLInputElement).value || '')"
+              class="flex-1 h-8 px-2.5 text-xs text-white font-mono outline-none bg-[#112240]"
+              style="border:none!important;" placeholder="默认渐变" />
+          </div>
+        </div>
+      </div>
+      <div v-if="component.type === 'metric-card'" class="border-t border-[#1e293b]" />
 
       <div v-if="component.type === 'chart-line' || component.type === 'chart-bar'" class="space-y-2">
         <h4 class="text-xs text-[#8892a0]">图表设置</h4>
@@ -529,6 +626,15 @@ onMounted(() => {
             :value="component.styles?.backgroundColor || '#1e3a5f'"
             class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
             @input="(e) => updateStyle('backgroundColor', (e.target as HTMLInputElement).value)"
+          />
+        </div>
+        <div class="mt-2">
+          <label class="text-xs text-[#8892a0]">边框颜色</label>
+          <input
+            type="color"
+            :value="component.styles?.borderColor || '#1e293b'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateStyle('borderColor', (e.target as HTMLInputElement).value)"
           />
         </div>
         <div class="mt-2">

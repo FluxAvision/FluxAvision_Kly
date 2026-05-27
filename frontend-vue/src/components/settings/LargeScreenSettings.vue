@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Loader2, Save, Upload, Monitor, Plus, Edit, Copy, Trash2, Eye } from 'lucide-vue-next'
+import { Loader2, Save, Upload, Monitor, Plus, Edit, Copy, Trash2 } from 'lucide-vue-next'
 import { message } from 'ant-design-vue'
 import TemplateEditor from '@/components/template-editor/TemplateEditor.vue'
 import type { TemplateConfig, ScreenTemplateData } from '@/types/template-editor'
@@ -78,7 +78,6 @@ const metricOptions = [
   { key: 'availableCapacity', label: '可接待人数' },
 ]
 
-const activeTab = ref('general')
 const config = ref<LargeScreenConfig>({ ...DEFAULT_CONFIG })
 const devices = ref<Device[]>([])
 const templates = ref<Template[]>([])
@@ -384,253 +383,150 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Tabs content -->
-    <div v-else class="bg-[#112240] border border-[#1e293b] rounded-xl">
-      <a-tabs v-model:activeKey="activeTab" class="px-6 pt-4">
-        <!-- General Tab -->
-        <a-tab-pane key="general" tab="通用配置">
-          <div class="space-y-6 pb-6">
-            <!-- Title -->
-            <div class="flex items-center gap-4">
-              <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">大屏标题</label>
-              <input
-                v-model="config.title"
-                type="text"
-                class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
-                placeholder="请输入大屏标题"
-              />
-            </div>
+    <!-- 内容区：左设置 + 右模板，两列并排 -->
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- 左侧：通用配置 -->
+      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-6">
+        <h3 class="text-sm font-semibold text-white">通用配置</h3>
 
-            <!-- Subtitle -->
-            <div class="flex items-center gap-4">
-              <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">副标题</label>
-              <input
-                v-model="config.subtitle"
-                type="text"
-                class="flex-1 bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
-                placeholder="请输入副标题"
-              />
-            </div>
+        <!-- Title -->
+        <div>
+          <label class="block text-xs text-[#5a6a80] mb-1">大屏标题</label>
+          <input
+            v-model="config.title"
+            type="text"
+            class="w-full bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+            placeholder="请输入大屏标题"
+          />
+        </div>
 
+        <!-- Subtitle -->
+        <div>
+          <label class="block text-xs text-[#5a6a80] mb-1">副标题</label>
+          <input
+            v-model="config.subtitle"
+            type="text"
+            class="w-full bg-[#0a192f] border border-[#1e293b] rounded-md px-3 py-2 text-sm text-white outline-none focus:border-[#00d9ff] transition-colors"
+            placeholder="请输入副标题"
+          />
+        </div>
 
-            <!-- Background (二选一: 颜色或图片) -->
-            <div class="flex items-start gap-4">
-              <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right pt-1">背景</label>
-              <div class="flex-1 space-y-3">
-                <!-- 预览区 -->
-                <div class="w-full h-20 rounded-lg border border-[#1e293b] flex items-center justify-center overflow-hidden"
-                  :style="{
-                    backgroundColor: config.backgroundImage ? 'transparent' : (config.backgroundColor || '#0a192f'),
-                    backgroundImage: config.backgroundImage ? `url(${config.backgroundImage})` : undefined,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }">
-                  <span v-if="!config.backgroundImage && !config.backgroundColor" class="text-xs text-[#8892a0]">无背景</span>
-                  <span v-else-if="config.backgroundColor && !config.backgroundImage" class="text-xs text-white/50">{{ config.backgroundColor }}</span>
-                </div>
-                <!-- 操作行 -->
-                <div class="flex items-center gap-3 flex-wrap">
-                  <!-- 颜色选择器 -->
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="color"
-                      :value="config.backgroundColor || '#0a192f'"
-                      @input="onColorChange"
-                      class="w-8 h-8 rounded cursor-pointer border border-[#1e293b] bg-transparent"
-                    />
-                    <input
-                      :value="config.backgroundColor"
-                      @input="onColorTextChange"
-                      placeholder="#0a192f"
-                      class="w-24 bg-[#0a192f] border border-[#1e293b] rounded-md px-2 py-1.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors font-mono"
-                    />
-                  </div>
-                  <span class="text-[#8892a0]">或</span>
-                  <button
-                    class="flex items-center gap-2 px-3 py-1.5 bg-[#0a192f] border border-[#1e293b] rounded-md text-sm text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer"
-                    @click="bgInputRef?.click()"
-                  >
-                    <Upload class="w-4 h-4" />
-                    上传图片
-                  </button>
-                  <button
-                    v-if="config.backgroundImage || config.backgroundColor"
-                    class="px-3 py-1.5 text-sm text-[#ef4444] hover:text-[#ef4444]/80 transition-colors cursor-pointer"
-                    @click="clearBackground"
-                  >
-                    清除
-                  </button>
-                  <input
-                    ref="bgInputRef"
-                    type="file"
-                    accept="image/*"
-                    class="hidden"
-                    @change="handleFileUpload"
-                  />
-                </div>
-              </div>
-            </div>
+        <!-- Background -->
+        <div>
+          <label class="block text-xs text-[#5a6a80] mb-1">背景</label>
+          <div class="w-full h-20 rounded-lg border border-[#1e293b] flex items-center justify-center overflow-hidden mb-2"
+            :style="{
+              backgroundColor: config.backgroundImage ? 'transparent' : (config.backgroundColor || '#0a192f'),
+              backgroundImage: config.backgroundImage ? `url(${config.backgroundImage})` : undefined,
+              backgroundSize: 'cover', backgroundPosition: 'center',
+            }">
+            <span v-if="!config.backgroundImage && !config.backgroundColor" class="text-xs text-[#8892a0]">无背景</span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <input type="color" :value="config.backgroundColor || '#0a192f'" @input="onColorChange" class="w-8 h-8 rounded cursor-pointer border border-[#1e293b] bg-transparent" />
+            <input :value="config.backgroundColor" @input="onColorTextChange" placeholder="#0a192f" class="w-20 bg-[#0a192f] border border-[#1e293b] rounded-md px-2 py-1.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors font-mono" />
+            <button class="flex items-center gap-1 px-2 py-1.5 bg-[#0a192f] border border-[#1e293b] rounded-md text-xs text-[#8892a0] hover:text-white hover:border-[#00d9ff]/50 transition-colors cursor-pointer" @click="bgInputRef?.click()">
+              <Upload class="w-3 h-3" />图片
+            </button>
+            <button v-if="config.backgroundImage || config.backgroundColor" class="px-2 py-1.5 text-xs text-[#ef4444] hover:text-[#ef4444]/80 transition-colors cursor-pointer" @click="clearBackground">清除</button>
+            <input ref="bgInputRef" type="file" accept="image/*" class="hidden" @change="handleFileUpload" />
+          </div>
+        </div>
 
-            <!-- Metrics Selection -->
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">显示指标</label>
-                <span class="text-xs text-[#8892a0]">已选 {{ config.metrics.length }}/{{ MAX_SCREEN_METRICS }}</span>
-              </div>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-2 ml-24">
-                <div
-                  v-for="opt in metricOptions"
-                  :key="opt.key"
-                  class="flex items-center gap-2 p-2.5 rounded-lg border transition-colors cursor-pointer"
-                  :class="[
-                    config.metrics.includes(opt.key)
-                      ? 'border-[#00d9ff]/30 bg-[#00d9ff]/5'
-                      : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/20'
-                  ]"
-                  @click="handleMetricToggle(opt.key)"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="config.metrics.includes(opt.key)"
-                    :disabled="!config.metrics.includes(opt.key) && config.metrics.length >= MAX_SCREEN_METRICS"
-                    @change="handleMetricToggle(opt.key)"
-                    class="w-4 h-4 rounded border-[#2d4765] accent-[#00d9ff]"
-                  />
-                  <span class="text-sm" :class="config.metrics.includes(opt.key) ? 'text-[#00d9ff]' : 'text-[#8892a0]'">
-                    {{ opt.label }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Device Selection -->
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <label class="text-sm text-[#8892a0] w-20 flex-shrink-0 text-right">显示设备</label>
-                <span class="text-xs text-[#8892a0]">已选 {{ config.deviceIds.length }}/{{ MAX_SCREEN_DEVICES }}</span>
-              </div>
-              <div v-if="devices.length === 0" class="text-sm text-[#8892a0] py-4 text-center ml-24">
-                暂无在线设备
-              </div>
-              <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-2 ml-24">
-                <div
-                  v-for="device in devices"
-                  :key="device.id"
-                  class="flex items-center gap-2 p-2.5 rounded-lg border transition-colors cursor-pointer"
-                  :class="[
-                    config.deviceIds.includes(device.id)
-                      ? 'border-[#00d9ff]/30 bg-[#00d9ff]/5'
-                      : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/20'
-                  ]"
-                  @click="handleDeviceToggle(device.id)"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="config.deviceIds.includes(device.id)"
-                    :disabled="!config.deviceIds.includes(device.id) && config.deviceIds.length >= MAX_SCREEN_DEVICES"
-                    @change="handleDeviceToggle(device.id)"
-                    class="w-4 h-4 rounded border-[#2d4765] accent-[#00d9ff]"
-                  />
-                  <span class="text-sm truncate" :class="config.deviceIds.includes(device.id) ? 'text-[#00d9ff]' : 'text-[#8892a0]'">
-                    {{ device.name }}
-                  </span>
-                </div>
-              </div>
+        <!-- Metrics -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs text-[#5a6a80]">显示指标</label>
+            <span class="text-xs text-[#8892a0]">{{ config.metrics.length }}/{{ MAX_SCREEN_METRICS }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5">
+            <div v-for="opt in metricOptions" :key="opt.key"
+              class="flex items-center gap-1.5 p-1.5 rounded-lg border transition-colors cursor-pointer"
+              :class="config.metrics.includes(opt.key) ? 'border-[#00d9ff]/30 bg-[#00d9ff]/5' : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/20'"
+              @click="handleMetricToggle(opt.key)">
+              <input type="checkbox" :checked="config.metrics.includes(opt.key)"
+                :disabled="!config.metrics.includes(opt.key) && config.metrics.length >= MAX_SCREEN_METRICS"
+                class="w-3.5 h-3.5 rounded border-[#2d4765] accent-[#00d9ff]" />
+              <span class="text-xs" :class="config.metrics.includes(opt.key) ? 'text-[#00d9ff]' : 'text-[#8892a0]'">{{ opt.label }}</span>
             </div>
           </div>
-        </a-tab-pane>
+        </div>
 
-        <!-- Templates Tab -->
-        <a-tab-pane key="templates" tab="大屏模板">
-          <div class="pb-6 space-y-4">
-            <div class="flex items-center justify-between">
-              <p class="text-sm text-[#8892a0]">选择或创建大屏模板</p>
-              <button
-                class="flex items-center gap-2 px-3 py-1.5 bg-[#00d9ff] text-[#0a192f] rounded-md text-sm font-medium hover:bg-[#00d9ff]/80 transition-colors cursor-pointer"
-                @click="handleCreateTemplate"
-              >
-                <Plus class="w-4 h-4" />
-                新建模板
-              </button>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div
-                v-for="tpl in allTemplates"
-                :key="tpl.id"
-                class="rounded-xl border-2 p-4 cursor-pointer transition-all duration-200 hover:scale-[1.02]"
-                :class="[
-                  config.templateId === tpl.id
-                    ? 'border-[#00d9ff] bg-[#00d9ff]/5'
-                    : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/30'
-                ]"
-              >
-                <!-- 缩略图 -->
-                <div
-                  class="w-full h-24 rounded-lg mb-3 flex items-center justify-center overflow-hidden"
-                  :style="{ background: `linear-gradient(135deg, ${(tpl as any).color || '#4a9eff'}20, ${(tpl as any).color || '#4a9eff'}05)` }"
-                  @click="handleTemplateSelect(tpl.id)"
-                >
-                  <img v-if="tpl.thumbnail" :src="tpl.thumbnail" class="w-full h-full object-cover" />
-                  <Monitor v-else class="w-8 h-8" :style="{ color: (tpl as any).color || '#4a9eff' }" />
-                </div>
-
-                <!-- 信息 -->
-                <div class="flex items-start justify-between">
-                  <div @click="handleTemplateSelect(tpl.id)">
-                    <h4 class="text-sm font-medium text-white flex items-center gap-1.5">
-                      {{ tpl.name }}
-                      <span v-if="(tpl as any).isBuiltin" class="text-xs px-1.5 py-0.5 rounded bg-[#1e293b] text-[#8892a0]">内置</span>
-                      <span v-else-if="tpl.isSystem" class="text-xs px-1.5 py-0.5 rounded bg-[#4a9eff]/20 text-[#4a9eff]">系统</span>
-                    </h4>
-                    <p class="text-xs text-[#8892a0] mt-1 line-clamp-2">{{ (tpl as any).desc || tpl.description || '自定义模板' }}</p>
-                  </div>
-
-                  <!-- 操作按钮 -->
-                  <div v-if="!(tpl as any).isBuiltin && !tpl.isSystem" class="flex items-center gap-1">
-                    <button
-                      class="p-1.5 rounded hover:bg-white/10 text-[#8892a0] hover:text-white transition-colors cursor-pointer"
-                      title="编辑"
-                      @click.stop="handleEditTemplate(tpl)"
-                    >
-                      <Edit class="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      class="p-1.5 rounded hover:bg-white/10 text-[#8892a0] hover:text-white transition-colors cursor-pointer"
-                      title="复制"
-                      @click.stop="handleDuplicateTemplate(tpl)"
-                    >
-                      <Copy class="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      class="p-1.5 rounded hover:bg-white/10 text-[#8892a0] hover:text-[#ef4444] transition-colors cursor-pointer"
-                      title="删除"
-                      @click.stop="handleDeleteTemplate(tpl)"
-                    >
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <!-- 当前使用标记 -->
-                <div v-if="config.templateId === tpl.id" class="mt-2">
-                  <span class="text-xs text-[#00d9ff]">当前使用</span>
-                </div>
-              </div>
+        <!-- Devices -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs text-[#5a6a80]">显示设备</label>
+            <span class="text-xs text-[#8892a0]">{{ config.deviceIds.length }}/{{ MAX_SCREEN_DEVICES }}</span>
+          </div>
+          <div v-if="devices.length === 0" class="text-xs text-[#8892a0] py-4 text-center">暂无在线设备</div>
+          <div v-else class="grid grid-cols-2 gap-1.5">
+            <div v-for="device in devices" :key="device.id"
+              class="flex items-center gap-1.5 p-1.5 rounded-lg border transition-colors cursor-pointer"
+              :class="config.deviceIds.includes(device.id) ? 'border-[#00d9ff]/30 bg-[#00d9ff]/5' : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/20'"
+              @click="handleDeviceToggle(device.id)">
+              <input type="checkbox" :checked="config.deviceIds.includes(device.id)"
+                :disabled="!config.deviceIds.includes(device.id) && config.deviceIds.length >= MAX_SCREEN_DEVICES"
+                class="w-3.5 h-3.5 rounded border-[#2d4765] accent-[#00d9ff]" />
+              <span class="text-xs truncate" :class="config.deviceIds.includes(device.id) ? 'text-[#00d9ff]' : 'text-[#8892a0]'">{{ device.name }}</span>
             </div>
           </div>
-        </a-tab-pane>
-      </a-tabs>
-      <div class="flex justify-center pt-4">
-        <button
-          :disabled="saving"
-          class="flex items-center gap-2 px-4 py-2 bg-[#00d9ff] text-[#0a192f] rounded-md text-sm font-medium hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-          @click="handleSave"
-        >
+        </div>
+
+        <button :disabled="saving"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#00d9ff] text-[#0a192f] rounded-md text-sm font-medium hover:bg-[#00d9ff]/80 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          @click="handleSave">
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
           <Save v-else class="w-4 h-4" />
           保存配置
         </button>
+      </div>
+
+      <!-- 右侧：大屏模板 -->
+      <div class="bg-[#112240] border border-[#1e293b] rounded-xl p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-white">大屏模板</h3>
+          <button
+            class="flex items-center gap-1 px-2.5 py-1.5 bg-[#00d9ff] text-[#0a192f] rounded-md text-xs font-medium hover:bg-[#00d9ff]/80 transition-colors cursor-pointer"
+            @click="handleCreateTemplate">
+            <Plus class="w-3 h-3" />
+            新建
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <div v-for="tpl in allTemplates" :key="tpl.id"
+            class="rounded-lg border-2 p-3 cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+            :class="config.templateId === tpl.id ? 'border-[#00d9ff] bg-[#00d9ff]/5' : 'border-[#1e293b] bg-[#0a192f] hover:border-[#00d9ff]/30'">
+            <div class="flex items-start gap-3">
+              <div class="w-16 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                :style="{ background: `linear-gradient(135deg, ${(tpl as any).color || '#4a9eff'}20, ${(tpl as any).color || '#4a9eff'}05)` }"
+                @click="handleTemplateSelect(tpl.id)">
+                <Monitor class="w-5 h-5" :style="{ color: (tpl as any).color || '#4a9eff' }" />
+              </div>
+              <div class="flex-1 min-w-0" @click="handleTemplateSelect(tpl.id)">
+                <h4 class="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                  {{ tpl.name }}
+                  <span v-if="(tpl as any).isBuiltin" class="text-[10px] px-1 py-0.5 rounded bg-[#1e293b] text-[#8892a0]">内置</span>
+                </h4>
+                <p class="text-xs text-[#8892a0] mt-0.5 truncate">{{ (tpl as any).desc || tpl.description || '' }}</p>
+                <div v-if="config.templateId === tpl.id" class="mt-1">
+                  <span class="text-[10px] text-[#00d9ff]">当前使用</span>
+                </div>
+              </div>
+              <div v-if="!(tpl as any).isBuiltin" class="flex items-center gap-0.5 flex-shrink-0">
+                <button class="p-1 rounded hover:bg-white/10 text-[#8892a0] hover:text-white transition-colors cursor-pointer" title="编辑" @click.stop="handleEditTemplate(tpl)">
+                  <Edit class="w-3.5 h-3.5" />
+                </button>
+                <button class="p-1 rounded hover:bg-white/10 text-[#8892a0] hover:text-white transition-colors cursor-pointer" title="复制" @click.stop="handleDuplicateTemplate(tpl)">
+                  <Copy class="w-3.5 h-3.5" />
+                </button>
+                <button class="p-1 rounded hover:bg-white/10 text-[#8892a0] hover:text-[#ef4444] transition-colors cursor-pointer" title="删除" @click.stop="handleDeleteTemplate(tpl)">
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

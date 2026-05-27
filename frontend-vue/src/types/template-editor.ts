@@ -14,6 +14,9 @@ export type ComponentType =
   | 'title'         // 标题组件
   | 'text'          // 文本
   | 'clock'         // 实时时间
+  | 'logo'          // Logo图片
+  | 'line'          // 线条
+  | 'ranking-counter'  // 排名计数器
 
 /** 数据源类型 */
 export type DataSourceType = 'metric' | 'device' | 'hourly' | 'static'
@@ -60,6 +63,12 @@ export interface ComponentConfig {
   // 数据绑定
   dataSource?: DataSourceConfig
 
+  // 动画配置
+  animation?: AnimationConfig
+
+  // 边框配置
+  border?: BorderConfig
+
   // 样式配置
   styles?: ComponentStyles
 }
@@ -77,6 +86,8 @@ export interface CanvasConfig {
   height: number
   backgroundColor: string
   backgroundImage?: string
+  background?: BackgroundConfig
+  theme?: CanvasTheme
   grid: CanvasGridConfig
   fitToScreen?: boolean  // 是否平铺满屏
 }
@@ -114,6 +125,43 @@ export interface ComponentDefinition {
   category: 'border' | 'metric' | 'chart' | 'video' | 'text'
   defaultProps: Record<string, any>
   defaultSize: { width: number; height: number }
+}
+
+/** 动画配置 */
+export interface AnimationConfig {
+  type: string
+  duration?: number
+  easing?: string
+  delay?: number
+  repeat?: number | 'infinite'
+}
+
+/** 背景配置 */
+export interface BackgroundConfig {
+  type: 'color' | 'image' | 'gradient' | 'decoration'
+  color?: string
+  image?: string
+  gradient?: string
+  decorationType?: string
+  opacity?: number
+  overlay?: string
+}
+
+/** 画布主题配置 */
+export interface CanvasTheme {
+  textColor?: string
+  fontFamily?: string
+  fontSize?: number
+  primaryColor?: string
+  secondaryColor?: string
+  [key: string]: any
+}
+
+/** 边框配置 */
+export interface BorderConfig {
+  type: string
+  color?: string[]
+  backgroundColor?: string
 }
 
 /** 指标类型定义 */
@@ -156,7 +204,7 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     name: '边框容器',
     icon: 'square',
     category: 'border',
-    defaultProps: { borderType: 'dv-border-box-1' },
+    defaultProps: { borderType: 'dv-border-box-1', borderColors: [] },
     defaultSize: { width: 400, height: 300 },
   },
   {
@@ -164,7 +212,7 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     name: '装饰线',
     icon: 'sparkles',
     category: 'border',
-    defaultProps: { decorationType: 'dv-decoration-1' },
+    defaultProps: { decorationType: 'dv-decoration-1', decorationColors: [] },
     defaultSize: { width: 200, height: 30 },
   },
   // 指标卡片
@@ -173,7 +221,7 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     name: '指标卡片',
     icon: 'credit-card',
     category: 'metric',
-    defaultProps: { title: '指标名称', showIcon: true },
+    defaultProps: { title: '指标名称', titleFontSize: 14, titleBold: false, titleAlign: 'center', layout: 'vertical', titleColor: '' },
     defaultSize: { width: 280, height: 140 },
   },
   {
@@ -236,6 +284,30 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     defaultProps: { format: 'full', showDate: true, showWeek: true, showTime: true },
     defaultSize: { width: 400, height: 50 },
   },
+  {
+    type: 'logo',
+    name: 'Logo',
+    icon: 'image',
+    category: 'border',
+    defaultProps: { logoSrc: '' },
+    defaultSize: { width: 200, height: 80 },
+  },
+  {
+    type: 'line',
+    name: '线条',
+    icon: 'minus',
+    category: 'border',
+    defaultProps: { direction: 'horizontal', thickness: 2, lineColor: '#00d9ff', lineOpacity: 1 },
+    defaultSize: { width: 300, height: 20 },
+  },
+  {
+    type: 'ranking-counter',
+    name: '排名计数器',
+    icon: 'hash',
+    category: 'metric',
+    defaultProps: { leftText: '您是第', rightText: '位到访的客户', digits: 6, counterFontSize: 20, textColor: '#ffffff', counterColor: '#00d9ff' },
+    defaultSize: { width: 500, height: 80 },
+  },
 ]
 
 /** 获取组件默认配置 */
@@ -276,6 +348,11 @@ export function getComponentDefault(type: ComponentType, name?: string): Omit<Co
 
   // 为数字计数器设置默认数据源
   if (type === 'counter') {
+    config.dataSource = { type: 'metric', key: 'totalIn' }
+  }
+
+  // 为排名计数器设置默认数据源
+  if (type === 'ranking-counter') {
     config.dataSource = { type: 'metric', key: 'totalIn' }
   }
 
