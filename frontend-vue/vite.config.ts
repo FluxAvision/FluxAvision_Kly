@@ -24,6 +24,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         'large-screen': resolve(__dirname, 'large-screen.html'),
+        'large-screen-designer': resolve(__dirname, 'large-screen-designer.html'),
       },
       output: {
         assetFileNames: 'assets/[name]-[hash][extname]',
