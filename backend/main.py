@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import API_HOST, API_PORT, CORS_ORIGINS, BASE_DIR, get_static_dir
+from config import API_HOST, API_PORT, CORS_ORIGINS, BASE_DIR, DATA_DIR, get_static_dir
 from database import init_database
 from utils import error_response
 from version import get_version
@@ -64,6 +64,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"✗ 数据库初始化失败: {e}")
         raise
+
+    # 检测并记录数据库升级（安装包升级时写入 .upgrade_marker）
+    upgrade_marker = os.path.join(DATA_DIR, ".upgrade_marker")
+    if os.path.exists(upgrade_marker):
+        try:
+            with open(upgrade_marker, "r", encoding="utf-8") as f:
+                lines = f.read().strip().split("\n")
+            if len(lines) >= 2:
+                old_ver, new_ver = lines[0].strip(), lines[1].strip()
+                logger.info(f"⬆  数据库升级: {old_ver} → {new_ver}")
+                logger.info(f"✓  数据库迁移已自动执行")
+        except Exception as e:
+            logger.warning(f"○ 读取升级标记文件失败: {e}")
+        finally:
+            try:
+                os.remove(upgrade_marker)
+            except Exception:
+                pass
 
     # 启动视频流管理器
     from stream_manager import stream_manager
