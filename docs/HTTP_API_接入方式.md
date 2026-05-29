@@ -483,20 +483,176 @@ GET /api/devices/a1b2c3d4e5f6g7h8i9j0k1l2m
 
 ---
 
-### 5.2 客流统计分析
+### 5.2 累计客流统计
 
-#### `GET /api/traffic/stats`
+#### `GET /api/traffic/stats/cumulative`
 
-查询客流统计数据，支持按日、周、月、年、自定义时间范围统计。
+获取所有设备（或指定设备）的累计客流统计。
 
 **查询参数：**
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| startDate | string | 否 | 起始日期 `YYYY-MM-DD`，默认今日 |
-| endDate | string | 否 | 结束日期 `YYYY-MM-DD`，默认今日 |
-| period | string | 否 | 统计周期：`daily` / `weekly` / `monthly` / `yearly`，默认 `daily` |
-| deviceId | string | 否 | 设备 ID，不传则查询所有设备总和 |
+| deviceId | string | 否 | 设备 ID，不传则返回所有设备 |
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "deviceId": "a1b2c3...",
+      "deviceName": "正门入口",
+      "totalIn": 10000,
+      "totalOut": 9500,
+      "currentInside": 500,
+      "lastResetAt": null,
+      "updatedAt": "2026-05-29T10:00:00"
+    }
+  ]
+}
+```
+
+---
+
+### 5.3 小时客流统计
+
+#### `GET /api/traffic/stats/hourly`
+
+查询指定日期内的小时级客流统计（含去重）。
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| date | string | 否 | 日期 `YYYY-MM-DD`，默认今日 |
+| deviceId | string | 否 | 设备 ID，不传则门店级汇总 |
+| startHour | int | 否 | 开始小时 0-23 |
+| endHour | int | 否 | 结束小时 0-23 |
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "date": "2026-05-29",
+    "hourly": [
+      {
+        "hour": 10,
+        "countIn": 50,
+        "countOut": 45,
+        "countInUnique": 42,
+        "countOutUnique": 38,
+        "insideCount": 5
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 5.4 每日客流统计
+
+#### `GET /api/traffic/stats/daily`
+
+查询指定日期范围内的每日客流统计（含去重）。
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| startDate | string | **是** | 起始日期 `YYYY-MM-DD` |
+| endDate | string | **是** | 结束日期 `YYYY-MM-DD` |
+| deviceId | string | 否 | 设备 ID，不传则门店级汇总 |
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "startDate": "2026-05-01",
+    "endDate": "2026-05-29",
+    "daily": [
+      {
+        "date": "2026-05-01",
+        "countIn": 500,
+        "countOut": 480,
+        "countInUnique": 420,
+        "countOutUnique": 400,
+        "insideMax": 50,
+        "insideMin": 5
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 5.5 实时客流数据
+
+#### `GET /api/traffic/stats/realtime`
+
+获取采集器实时客流数据（需大华 SDK 运行中）。
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| deviceId | string | 否 | 设备 ID，不传则返回所有设备 |
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "deviceId": "a1b2c3...",
+      "deviceName": "正门入口",
+      "enteredToday": 100,
+      "exitedToday": 90,
+      "insideNow": 10,
+      "lastUpdate": "...",
+      "collecting": true,
+      "state": "connected"
+    }
+  ]
+}
+```
+
+---
+
+### 5.6 重置累计客流
+
+#### `POST /api/traffic/stats/reset-cumulative`
+
+重置指定设备的累计客流统计数据，常用于门店重开业或统计周期重置。
+
+**请求体：**
+
+```json
+{
+  "deviceId": "a1b2c3..."
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "deviceId": "a1b2c3...",
+    "message": "累计客流统计已重置",
+    "resetAt": "2026-05-29T10:00:00"
+  }
+}
+```
 
 ---
 
@@ -630,6 +786,32 @@ GET /api/devices/a1b2c3d4e5f6g7h8i9j0k1l2m
 | endDate | string | 否 | 结束日期 `YYYY-MM-DD` |
 | deviceId | string | 否 | 设备 ID |
 | dimension | string | 否 | 时间维度：`hourly`（小时） / `daily`（天） ，默认 `daily` |
+
+### `PUT /api/traffic/history/correct`
+
+修正指定时段客流记录。如果记录已存在则覆盖更新，不存在则创建。
+
+**请求体：**
+
+```json
+{
+  "date": "2026-04-05",
+  "hour": 14,
+  "countIn": 20,
+  "countOut": 15,
+  "deviceId": "a1b2c3..."
+}
+```
+
+**请求体字段说明：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| date | string | **是** | 日期 `YYYY-MM-DD` |
+| hour | int | **是** | 小时 `0-23` |
+| countIn | int | 否 | 进入人数（修正值），默认 0 |
+| countOut | int | 否 | 离开人数（修正值），默认 0 |
+| deviceId | string | 否 | 设备 ID，不传则修正门店汇总记录 |
 
 ---
 

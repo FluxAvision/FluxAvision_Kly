@@ -64,15 +64,15 @@ FluxAvision/
 │   │   ├── auth.py                  # POST /api/auth           — 登录验证
 │   │   ├── devices.py               # GET/POST /api/devices   — 设备列表/创建
 │   │   ├── device_id.py             # GET/PUT/DELETE /api/devices/:id — 设备详情/更新/删除
-│   │   ├── device_status.py         # GET /api/devices/:id/status — 设备状态
+│   │   ├── device_status.py         # PUT /api/devices/:id/status — 设备状态
 │   │   ├── traffic.py               # POST /api/traffic       — 客流数据上报
 │   │   ├── traffic_history.py       # GET /api/traffic/history — 历史客流查询
 │   │   ├── traffic_dashboard.py     # GET /api/traffic/dashboard — 仪表盘聚合数据
-│   │   ├── traffic_collector.py     # GET /api/collector/status — 采集状态
+│   │   ├── traffic_collector.py     # GET /api/traffic-collector/status — 采集状态
 │   │   ├── settings.py              # GET/PUT /api/settings   — 系统设置
 │   │   ├── license.py               # GET/POST /api/license   — 授权激活
 │   │   ├── seed.py                  # POST /api/seed          — 生成测试数据
-│   │   ├── stream.py                # GET /api/stream/:id     # RTSP 视频流
+│   │   ├── stream.py                # GET /api/devices/:id/stream — RTSP 视频流
 │   │   ├── large_screen.py          # GET/PUT /api/large-screen — 大屏设置
 │   │   └── large_screen_templates.py # GET /api/large-screen/templates — 大屏模板
 │   │
@@ -168,19 +168,19 @@ FluxAvision/
 | GET | `/api/devices/:id` | 获取单个设备详情 |
 | PUT | `/api/devices/:id` | 更新设备（凭证变更自动重连） |
 | DELETE | `/api/devices/:id` | 删除设备（自动停止采集） |
-| GET | `/api/devices/:id/status` | 设备状态（在线/离线/重连中） |
+| PUT | `/api/devices/:id/status` | 设备状态（在线/离线/重连中） |
 | POST | `/api/traffic` | 上报客流数据 |
 | GET | `/api/traffic/history` | 历史客流查询（按日期/设备/范围） |
 | GET | `/api/traffic/dashboard` | 仪表盘聚合数据 |
-| GET | `/api/collector/status` | 采集器状态详情 |
-| POST | `/api/collector/restart` | 重启采集器 |
+| GET | `/api/traffic-collector/status` | 采集器状态详情 |
+| POST | `/api/traffic-collector/restart` | 重启采集器 |
 | GET | `/api/settings` | 获取系统设置 |
 | PUT | `/api/settings` | 更新系统设置 |
 | GET | `/api/license` | 获取 License 信息（含硬件指纹） |
 | POST | `/api/license` | 激活 License（Ed25519 验证） |
 | GET | `/api/license/parse` | 解析激活码（调试用） |
 | POST | `/api/seed` | 生成测试数据 |
-| GET | `/api/stream/:id` | RTSP 视频流 (MJPEG) |
+| GET | `/api/devices/:id/stream` | RTSP 视频流 (MJPEG) |
 | GET | `/api/large-screen` | 获取大屏设置 |
 | PUT | `/api/large-screen` | 更新大屏设置 |
 | GET | `/api/large-screen/templates` | 大屏模板列表 |
