@@ -27,6 +27,20 @@ JPEG_QUALITY = 70
 CAPTURE_IDLE_SLEEP = 0.005
 STALE_FRAME_SECONDS = 3.0
 
+# ===== 优化参数 =====
+# 预览流缩放宽度。将 RTSP 原始帧缩放到此宽度（保持宽高比），
+# 大幅减少 JPEG 尺寸（约 80-90%）、网络传输量和浏览器解码开销。
+# 设为 None 则不缩放（保留原始分辨率）。
+SCALE_WIDTH = 640
+
+# 采集线程目标帧率。不再编码每一帧，仅按此帧率编码最新帧。
+# 通常 15fps 即可满足监控预览需求，降低 CPU 占用约 40-60%。
+CAPTURE_FPS = 15
+
+# 激进低延迟模式。开启后增加更多 FFmpeg 低延迟参数，
+# 进一步降低 RTSP 内部缓冲区带来的延迟。
+AGGRESSIVE_LOW_LATENCY = True
+
 
 @dataclass
 class CameraSession:
@@ -47,6 +61,8 @@ class CameraSession:
     is_running: bool = False
     reconnect_count: int = 0
     frame_count: int = 0
+    # 用于帧率控制：上次编码的时间戳
+    last_encode_time: float = 0.0
 
 
 class StreamManager:
@@ -142,7 +158,14 @@ class StreamManager:
             return True
 
     def _capture_loop(self, device_id: str):
-        """持续采集最新帧并预编码为 JPEG。"""
+        """
+        持续采集 RTSP 流，缩放画面后预编码为 JPEG。
+
+        优化点：
+        - 分辨率缩放：SCALE_WIDTH 控制预览宽度，大幅降低 JPEG 尺寸
+        - 帧率控制：CAPTURE_FPS 控制编码频率，避免过度编码
+        - 低延迟 FFmpeg：增加 max_delay/probesize 等选项降低 RTSP 缓冲
+        """
         logger.info(f"[DEBUG] _capture_loop 已进入: 设备={device_id}")
         try:
             import cv2
@@ -159,16 +182,28 @@ class StreamManager:
         logger.info(f"[DEBUG] RTSP URL={session.rtsp_url}")
 
         # 尽量降低 FFmpeg 内部缓冲，优先拿到最新画面。
-        os.environ.setdefault(
-            "OPENCV_FFMPEG_CAPTURE_OPTIONS",
-            "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay",
+        ffmpeg_opts = "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay"
+        if AGGRESSIVE_LOW_LATENCY:
+            ffmpeg_opts += (
+                "|probesize;32"
+                "|analyzeduration;0"
+                "|max_delay;0"
+                "|reorder_queue_size;0"
+                "|fflags;discardcorrupt"
+            )
+        os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", ffmpeg_opts)
+        logger.info(
+            f"[DEBUG] OPENCV_FFMPEG_CAPTURE_OPTIONS="
+            f"{os.environ.get('OPENCV_FFMPEG_CAPTURE_OPTIONS')}"
         )
-        logger.info(f"[DEBUG] OPENCV_FFMPEG_CAPTURE_OPTIONS={os.environ.get('OPENCV_FFMPEG_CAPTURE_OPTIONS')}")
 
         encode_params = [
             int(cv2.IMWRITE_JPEG_QUALITY), int(JPEG_QUALITY),
             int(cv2.IMWRITE_JPEG_OPTIMIZE), 1,
         ]
+
+        # 帧率控制：相邻两帧编码的最小间隔
+        min_frame_interval = 1.0 / CAPTURE_FPS
 
         while session.is_running:
             if session.cap is not None:
@@ -181,7 +216,10 @@ class StreamManager:
             logger.info(f"[DEBUG] 正在调用 cv2.VideoCapture: url={session.rtsp_url[:80]}")
             try:
                 cap = cv2.VideoCapture(session.rtsp_url, cv2.CAP_FFMPEG)
-                logger.info(f"[DEBUG] VideoCapture 返回: cap={cap}, isOpened={cap.isOpened() if cap else 'N/A'}")
+                logger.info(
+                    f"[DEBUG] VideoCapture 返回: cap={cap}, "
+                    f"isOpened={cap.isOpened() if cap else 'N/A'}"
+                )
             except Exception as e:
                 logger.error(f"[DEBUG] VideoCapture 抛出异常: {e}")
                 session.reconnect_count += 1
@@ -207,15 +245,38 @@ class StreamManager:
                 pass
             session.cap = cap
             session.reconnect_count = 0
+            session.last_encode_time = 0.0
             logger.info(f"RTSP 连接成功: 设备={device_id}")
 
             frame_fail_count = 0
             while session.is_running:
                 ret, frame = cap.read()
                 if ret and frame is not None:
+                    now = time.time()
+
+                    # 帧率控制：距上次编码不足最小间隔则跳过编码
+                    if now - session.last_encode_time < min_frame_interval:
+                        # 只更新帧计数，不编码 JPEG（节省 CPU）
+                        session.frame_count += 1
+                        time.sleep(CAPTURE_IDLE_SLEEP)
+                        continue
+
+                    # 分辨率缩放：如果设置了 SCALE_WIDTH 且帧宽超过限制
                     jpeg_bytes = None
                     try:
-                        ok, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
+                        scale_frame = frame
+                        if SCALE_WIDTH is not None:
+                            h, w = frame.shape[:2]
+                            if w > SCALE_WIDTH:
+                                ratio = SCALE_WIDTH / w
+                                new_w = int(w * ratio)
+                                new_h = int(h * ratio)
+                                scale_frame = cv2.resize(
+                                    frame, (new_w, new_h),
+                                    interpolation=cv2.INTER_LINEAR
+                                )
+
+                        ok, jpeg_data = cv2.imencode(".jpg", scale_frame, encode_params)
                         if ok:
                             jpeg_bytes = jpeg_data.tobytes()
                     except Exception as e:
@@ -224,9 +285,10 @@ class StreamManager:
                     with session.frame_lock:
                         session.latest_frame = frame
                         session.latest_jpeg = jpeg_bytes
-                        session.last_frame_time = time.time()
+                        session.last_frame_time = now
                         session.frame_count += 1
 
+                    session.last_encode_time = now
                     frame_fail_count = 0
                     time.sleep(CAPTURE_IDLE_SLEEP)
                 else:
@@ -325,6 +387,8 @@ class StreamManager:
             "frameCount": session.frame_count,
             "lastFrameTime": session.last_frame_time,
             "reconnectCount": session.reconnect_count,
+            "scaleWidth": SCALE_WIDTH,
+            "targetFps": CAPTURE_FPS,
         }
 
     def _monitor_loop(self):

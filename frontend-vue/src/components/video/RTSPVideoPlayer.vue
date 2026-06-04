@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, shallowRef, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, shallowRef, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   AlertTriangle,
   Loader2,
@@ -32,8 +32,9 @@ type PlayerStatus = 'connecting' | 'playing' | 'error' | 'offline'
 const POLL_INTERVAL = 200
 const ERROR_RETRY_INTERVAL = 3000
 const ERROR_MAX_RETRIES = 10
+const MAX_FRAME_DECODE_MS = 100
 
-const imgRef = ref<HTMLImageElement>()
+const canvasRef = ref<HTMLCanvasElement>()
 const containerRef = ref<HTMLDivElement>()
 const pollTimerRef = shallowRef<ReturnType<typeof setInterval> | null>(null)
 const retryTimerRef = shallowRef<ReturnType<typeof setTimeout> | null>(null)
@@ -41,7 +42,7 @@ const wsRef = shallowRef<WebSocket | null>(null)
 const retryCountRef = ref(0)
 const statusRef = ref<PlayerStatus>('connecting')
 const usePollingRef = ref(false)
-const objectUrlRef = ref<string | null>(null)
+const frameDecodingRef = ref(false)
 const frameTokenRef = ref(0)
 
 const playerStatus = ref<PlayerStatus>(props.status === 'online' ? 'connecting' : 'offline')
@@ -54,13 +55,6 @@ const snapshotUrl = `/api/devices/${props.deviceId}/snapshot`
 function updateStatus(newStatus: PlayerStatus) {
   statusRef.value = newStatus
   playerStatus.value = newStatus
-}
-
-function revokeObjectUrl() {
-  if (objectUrlRef.value) {
-    URL.revokeObjectURL(objectUrlRef.value)
-    objectUrlRef.value = null
-  }
 }
 
 function clearTimers() {
@@ -89,10 +83,8 @@ function closeWebSocket() {
 function clearAll() {
   clearTimers()
   closeWebSocket()
-  revokeObjectUrl()
-  if (imgRef.value) {
-    imgRef.value.src = ''
-  }
+  frameDecodingRef.value = false
+  frameTokenRef.value = 0
 }
 
 function buildWebSocketUrl(): string {
@@ -102,25 +94,77 @@ function buildWebSocketUrl(): string {
   return `${protocol}//${hostname}:${backendPort}/api/devices/${props.deviceId}/stream/ws`
 }
 
-function applyFrame(frame: Blob) {
-  if (!imgRef.value) return
+/**
+ * 在 Canvas 上绘制一帧画面。
+ * 使用 createImageBitmap 解码 Blob，然后 drawImage 到 Canvas。
+ * 如果前一帧仍在解码，丢弃新帧（帧丢弃机制）。
+ */
+async function renderFrameToCanvas(blob: Blob, token: number): Promise<void> {
+  if (!canvasRef.value || token !== frameTokenRef.value) return
+  if (frameDecodingRef.value) return  // 丢弃：前一帧还在解码中
 
-  const token = ++frameTokenRef.value
-  const nextUrl = URL.createObjectURL(frame)
-  const img = imgRef.value
-
-  revokeObjectUrl()
-  objectUrlRef.value = nextUrl
-  updateStatus('playing')
-  retryCountRef.value = 0
-  img.src = nextUrl
-
-  img.onerror = () => {
-    if (token === frameTokenRef.value) {
-      URL.revokeObjectURL(nextUrl)
-      objectUrlRef.value = null
+  frameDecodingRef.value = true
+  try {
+    // 使用 ImageBitmap 解码（浏览器优化路径，比 Image 对象更高效）
+    const bitmap = await createImageBitmap(blob)
+    if (token !== frameTokenRef.value) {
+      // 在解码过程中已被更新的帧替代，丢弃
+      bitmap.close()
+      return
     }
-    img.onerror = null
+
+    const canvas = canvasRef.value
+    // 调整 Canvas 尺寸匹配 Bitmap（避免每次 setAttribute 导致重排）
+    if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+    }
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(bitmap, 0, 0)
+    }
+    bitmap.close()
+
+    updateStatus('playing')
+    retryCountRef.value = 0
+  } catch (e) {
+    // 如果 createImageBitmap 失败（较老浏览器），回退到 Image 方式
+    try {
+      const url = URL.createObjectURL(blob)
+      if (token !== frameTokenRef.value) {
+        URL.revokeObjectURL(url)
+        return
+      }
+      const img = new Image()
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          URL.revokeObjectURL(url)
+          if (token !== frameTokenRef.value) {
+            reject(new Error('stale frame'))
+            return
+          }
+          const canvas = canvasRef.value!
+          if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
+            canvas.width = img.naturalWidth
+            canvas.height = img.naturalHeight
+          }
+          const ctx = canvas.getContext('2d')
+          if (ctx) ctx.drawImage(img, 0, 0)
+          resolve()
+        }
+        img.onerror = () => {
+          URL.revokeObjectURL(url)
+          reject(new Error('image decode error'))
+        }
+        img.src = url
+      })
+      updateStatus('playing')
+      retryCountRef.value = 0
+    } catch {
+      // decode failed silently
+    }
+  } finally {
+    frameDecodingRef.value = false
   }
 }
 
@@ -131,34 +175,38 @@ function startPolling() {
 
   let consecutiveErrors = 0
 
-  pollTimerRef.value = setInterval(() => {
-    const timestamp = Date.now()
-    const testImg = new Image()
-
-    testImg.onload = () => {
-      consecutiveErrors = 0
-      if (imgRef.value) {
-        imgRef.value.src = `${snapshotUrl}?t=${timestamp}`
+  pollTimerRef.value = setInterval(async () => {
+    const token = ++frameTokenRef.value
+    try {
+      const res = await fetch(`${snapshotUrl}?t=${Date.now()}`)
+      if (!res.ok) {
+        consecutiveErrors++
+        if (consecutiveErrors >= 5) {
+          updateStatus('error')
+          clearTimers()
+          if (retryCountRef.value >= ERROR_MAX_RETRIES) return
+          retryCountRef.value += 1
+          retryTimerRef.value = setTimeout(() => {
+            startPolling()
+          }, ERROR_RETRY_INTERVAL)
+        }
+        return
       }
-      updateStatus('playing')
-      retryCountRef.value = 0
-    }
-
-    testImg.onerror = () => {
-      consecutiveErrors += 1
+      consecutiveErrors = 0
+      const blob = await res.blob()
+      renderFrameToCanvas(blob, token)
+    } catch {
+      consecutiveErrors++
       if (consecutiveErrors >= 5) {
         updateStatus('error')
         clearTimers()
         if (retryCountRef.value >= ERROR_MAX_RETRIES) return
-
         retryCountRef.value += 1
         retryTimerRef.value = setTimeout(() => {
           startPolling()
         }, ERROR_RETRY_INTERVAL)
       }
     }
-
-    testImg.src = `${snapshotUrl}?t=${timestamp}`
   }, POLL_INTERVAL)
 }
 
@@ -177,7 +225,8 @@ function startWebSocket() {
 
   ws.onmessage = (event: MessageEvent) => {
     if (event.data instanceof Blob) {
-      applyFrame(event.data)
+      const token = ++frameTokenRef.value
+      renderFrameToCanvas(event.data, token)
     }
   }
 
@@ -243,11 +292,14 @@ onUnmounted(() => {
     :class="className"
     :style="{ minHeight: compact ? '120px' : '200px' }"
   >
-    <img
-      ref="imgRef"
-      :alt="name || '实时视频'"
-      class="absolute inset-0 h-full w-full object-contain"
-      :style="{ display: effectiveStatus === 'playing' ? 'block' : 'none' }"
+    <!-- Canvas 渲染层 -->
+    <canvas
+      ref="canvasRef"
+      class="absolute inset-0 h-full w-full"
+      :style="{
+        objectFit: 'contain',
+        display: effectiveStatus === 'playing' ? 'block' : 'none'
+      }"
     />
 
     <!-- Offline overlay -->
