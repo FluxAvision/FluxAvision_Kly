@@ -52,7 +52,7 @@ The frontend lives in `frontend-vue/` (separate from the legacy `src/` which con
 - `layout/Sidebar.vue` — Left sidebar navigation
 - `settings/SystemSettings.vue` — Store name, password, dashboard metrics config
 - `settings/LargeScreenSettings.vue` — Large screen template/config + license
-- `video/RTSPVideoPlayer.vue` — WebSocket + MJPEG snapshot polling player
+- `video/RTSPVideoPlayer.vue` — WebSocket + snapshot polling player, Canvas rendering with frame dropping
 
 **Key patterns:**
 - No Vue Router — pure `ref()` based page switching (matches original React pattern)
@@ -79,6 +79,27 @@ The frontend lives in `frontend-vue/` (separate from the legacy `src/` which con
 - `license_crypto.py` — Ed25519 signature verification for license activation
 - `config.py` — Path resolution, DB config, AES key management, hardware fingerprint
 - `windows_service.py` — System tray, auto-start, single-instance enforcement
+
+### Optimized Video Streaming (v2.2.0+)
+
+The video streaming pipeline has been optimized to address customer-reported buffering/latency:
+
+#### Backend (`stream_manager.py`) Optimizations
+1. **Resolution Scaling** (`SCALE_WIDTH=640`): Raw RTSP frames (typically 1920×1080) are scaled down before JPEG encoding. This reduces JPEG size by ~80-90% (from 80-150KB to 8-20KB per frame), dramatically cutting bandwidth, network latency, and browser decode overhead.
+2. **Frame Rate Control** (`CAPTURE_FPS=15`): The capture thread only encodes frames at the target FPS, skipping intermediate frames. This reduces CPU usage by ~40-60% compared to encoding every camera frame (typically 25fps).
+3. **Aggressive Low-Latency FFmpeg** (`AGGRESSIVE_LOW_LATENCY=True`): Additional FFmpeg options (`probesize=32`, `analyzeduration=0`, `max_delay=0`, `reorder_queue_size=0`) further reduce the RTSP internal buffer latency.
+4. Config constants are directly in `stream_manager.py` and can be tuned per deployment.
+
+#### Frontend (`RTSPVideoPlayer.vue`) Optimizations
+1. **Canvas Rendering**: Replaced `<img>` tag with `<canvas>` element + `createImageBitmap()` for more efficient frame decoding and rendering.
+2. **Frame Dropping**: If a frame is still being decoded when a new one arrives, it's silently dropped. Prevents the queue buildup that caused visible stuttering.
+3. **No Blob URL Race Conditions**: Eliminated `URL.createObjectURL()` / `URL.revokeObjectURL()` pattern which caused flicker under load.
+4. WebSocket remains primary transport; HTTP snapshot polling is the fallback.
+
+#### Transport
+- Primary: WebSocket binary JPEG push at ~15fps (`/api/devices/{id}/stream/ws`)
+- Fallback: HTTP snapshot polling at 200ms intervals (`/api/devices/{id}/snapshot`)
+- Legacy: MJPEG HTTP stream (`/api/devices/{id}/stream`) for compatibility
 
 ### Security Architecture (4 layers)
 1. Hardware fingerprint binding (CPU + motherboard + disk + MAC → SHA-256)
