@@ -194,6 +194,59 @@ function applyProps() {
   emit('push-history')
 }
 
+// 获取视频墙设备ID数组（从 cellDeviceIds）
+function getVideoWallDeviceIds(): string[] {
+  const ids = localProps.value.cellDeviceIds ? [...localProps.value.cellDeviceIds] : []
+  const cols = localProps.value.gridCols ?? 2
+  const rows = localProps.value.gridRows ?? 1
+  const total = cols * rows
+  while (ids.length < total) ids.push('')
+  return ids.slice(0, total)
+}
+
+// 批量更新视频墙格子设备信息（id/name/ip/rtspUrl 四个数组同时更新）
+function updateVideoWallCell(index: number, deviceId: string) {
+  const device = devices.value.find(d => d.id === deviceId)
+
+  // cellDeviceIds
+  const ids = localProps.value.cellDeviceIds ? [...localProps.value.cellDeviceIds] : []
+  while (ids.length <= index) ids.push('')
+  ids[index] = deviceId
+  localProps.value.cellDeviceIds = ids
+
+  // cellDeviceNames
+  const names = localProps.value.cellDeviceNames ? [...localProps.value.cellDeviceNames] : []
+  while (names.length <= index) names.push('')
+  names[index] = device?.name || ''
+  localProps.value.cellDeviceNames = names
+
+  // cellDeviceIps
+  const ips = localProps.value.cellDeviceIps ? [...localProps.value.cellDeviceIps] : []
+  while (ips.length <= index) ips.push('')
+  ips[index] = device?.ip || ''
+  localProps.value.cellDeviceIps = ips
+
+  // cellRtspUrls
+  const rtspUrls = localProps.value.cellRtspUrls ? [...localProps.value.cellRtspUrls] : []
+  while (rtspUrls.length <= index) rtspUrls.push('')
+  rtspUrls[index] = (device as any)?.rtspUrl || ''
+  localProps.value.cellRtspUrls = rtspUrls
+
+  applyProps()
+}
+
+// 同步视频墙所有数组到新的宫格数量
+function syncVideoWallArrays(newCount: number) {
+  const fields = ['cellDeviceIds', 'cellDeviceNames', 'cellDeviceIps', 'cellRtspUrls'] as const
+  for (const field of fields) {
+    const arr = localProps.value[field] ? [...localProps.value[field]] : []
+    while (arr.length < newCount) arr.push('')
+    while (arr.length > newCount) arr.pop()
+    localProps.value[field] = arr
+  }
+  applyProps()
+}
+
 // ─── 动画 Tab ──────────────────────────────────
 
 const localAnimation = ref<{ type: string; duration?: number; delay?: number; repeat?: number | string }>({ type: 'none' })
@@ -1099,6 +1152,119 @@ onMounted(() => {
                   @input="handleColorInput($event, v => { localProps.lineColor = v; applyProps() })"
                   class="flex-1 h-8 px-2.5 text-xs text-white font-mono outline-none bg-[#112240]"
                   style="border:none!important;" placeholder="#00d9ff" />
+              </div>
+            </div>
+          </div>
+          <div class="border-t border-[#1e293b]" />
+        </template>
+
+        <!-- ── 视频墙专有属性 ── -->
+        <template v-if="selectedComponent.type === 'video-wall'">
+          <div class="space-y-3">
+            <h4 class="text-xs font-medium text-[#8892a0] uppercase tracking-wider">视频墙设置</h4>
+
+            <!-- 宫格布局 -->
+            <div>
+              <label class="block text-xs text-[#5a6a80] mb-1">宫格布局</label>
+              <select
+                :value="`${localProps.gridCols || 2}x${localProps.gridRows || 1}`"
+                class="w-full h-8 rounded-md bg-[#112240] border border-[#1e293b] px-2.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors appearance-none cursor-pointer"
+                @change="(e) => {
+                  const [cols, rows] = (e.target as HTMLSelectElement).value.split('x').map(Number)
+                  localProps.gridCols = cols
+                  localProps.gridRows = rows
+                  syncVideoWallArrays(cols * rows)
+                }"
+              >
+                <option value="1x1">1 宫格 (1x1)</option>
+                <option value="2x1">2 宫格 (1行2列)</option>
+                <option value="2x2">4 宫格 (2x2)</option>
+                <option value="3x2">6 宫格 (3列2行)</option>
+                <option value="4x2">8 宫格 (4列2行)</option>
+                <option value="3x3">9 宫格 (3x3)</option>
+              </select>
+            </div>
+
+            <!-- 每个格子的设备选择 -->
+            <div v-for="(deviceId, index) in getVideoWallDeviceIds()" :key="index">
+              <label class="block text-xs text-[#5a6a80] mb-1">格子 {{ index + 1 }} 选择设备</label>
+              <select
+                :value="deviceId || ''"
+                class="w-full h-8 rounded-md bg-[#112240] border border-[#1e293b] px-2.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors appearance-none cursor-pointer"
+                @change="(e) => updateVideoWallCell(index, (e.target as HTMLSelectElement).value)"
+              >
+                <option value="">请选择设备</option>
+                <option v-for="d in devices" :key="d.id" :value="d.id">
+                  {{ d.name }} - {{ d.ip }}
+                </option>
+              </select>
+              <p v-if="devices.length === 0" class="text-xs text-[#5a6a80] mt-1">
+                暂无设备，请先在设备管理中添加
+              </p>
+            </div>
+
+            <!-- 自动播放和静音 -->
+            <div class="flex items-center gap-4">
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  :checked="localProps.autoPlay ?? true"
+                  class="w-4 h-4 rounded border-[#2d4765] accent-[#00d9ff]"
+                  @change="localProps.autoPlay = ($event.target as HTMLInputElement).checked; applyProps()"
+                />
+                <span class="text-xs text-white">自动播放</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  :checked="localProps.muted ?? true"
+                  class="w-4 h-4 rounded border-[#2d4765] accent-[#00d9ff]"
+                  @change="localProps.muted = ($event.target as HTMLInputElement).checked; applyProps()"
+                />
+                <span class="text-xs text-white">静音</span>
+              </label>
+            </div>
+
+            <!-- 边框样式 -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-[#5a6a80] mb-1">格子边框宽度</label>
+                <input
+                  :value="localProps.cellBorderWidth ?? 1"
+                  type="number"
+                  min="0"
+                  max="10"
+                  class="w-full h-8 rounded-md bg-[#112240] border border-[#1e293b] px-2.5 text-xs text-white outline-none focus:border-[#00d9ff] transition-colors"
+                  @change="localProps.cellBorderWidth = Number(($event.target as HTMLInputElement).value); applyProps()"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-[#5a6a80] mb-1">格子边框颜色</label>
+                <div class="flex items-center gap-0 rounded-md border border-[#1e293b] overflow-hidden">
+                  <input type="color" :value="localProps.cellBorderColor || '#1e293b'"
+                    @input="handleColorInput($event, v => { localProps.cellBorderColor = v; applyProps() })"
+                    class="w-10 h-8 cursor-pointer border-0 p-0.5 bg-transparent"
+                    style="flex-shrink:0;min-width:40px;" />
+                  <input :value="localProps.cellBorderColor || ''"
+                    @input="handleColorInput($event, v => { localProps.cellBorderColor = v; applyProps() })"
+                    class="flex-1 h-8 px-2.5 text-xs text-white font-mono outline-none bg-[#112240]"
+                    style="border:none!important;" placeholder="#1e293b" />
+                </div>
+              </div>
+            </div>
+
+            <!-- 无视频时的背景色 -->
+            <div>
+              <label class="block text-xs text-[#5a6a80] mb-1">无视频源背景色</label>
+              <div class="flex items-center gap-0 rounded-md border border-[#1e293b] overflow-hidden">
+                <input type="color" :value="localProps.placeholderBg || '#0d1421'"
+                  @input="handleColorInput($event, v => { localProps.placeholderBg = v; applyProps() })"
+                  class="w-10 h-8 cursor-pointer border-0 p-0.5 bg-transparent"
+                  style="flex-shrink:0;min-width:40px;" />
+                <input :value="localProps.placeholderBg || ''"
+                  @input="handleColorInput($event, v => { localProps.placeholderBg = v; applyProps() })"
+                  class="flex-1 h-8 px-2.5 text-xs text-white font-mono outline-none bg-[#112240]"
+                  style="border:none!important;" placeholder="#0d1421" />
               </div>
             </div>
           </div>

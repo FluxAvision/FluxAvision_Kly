@@ -34,6 +34,30 @@ def _get_device(device_id: str):
         return session.query(Device).filter(Device.id == device_id).first()
 
 
+def _get_fallback_jpeg(message: str = "视频待配置") -> bytes:
+    """获取回退帧，fallback 不依赖数据库设备存在。"""
+    fb = stream_manager._generate_standalone_fallback(message)
+    if fb:
+        return fb
+    return _create_minimal_jpeg()
+
+
+async def _send_fallback_ws_frames(websocket: WebSocket, device_id: str, message: str):
+    """
+    当设备不存在时，通过 WebSocket 持续推送回退帧。
+    这样前端不会立刻断开，而是看到提示画面。
+    """
+    try:
+        while True:
+            jpeg_bytes = _get_fallback_jpeg(message)
+            await websocket.send_bytes(jpeg_bytes)
+            await asyncio.sleep(WS_FRAME_INTERVAL * 3)
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        logger.info(f"[视频流] 回退帧推送结束: 设备={device_id}")
+
+
 def _ensure_stream_started(device_id: str, rtsp_url: str, client_id: str) -> bool:
     already_running = stream_manager.add_client(device_id, client_id)
     if already_running:
@@ -51,7 +75,10 @@ async def get_device_stream_ws(websocket: WebSocket, device_id: str):
     """通过 WebSocket 推送二进制 JPEG 帧。"""
     device = _get_device(device_id)
     if not device:
-        await websocket.close(code=1008, reason="设备不存在")
+        # 设备不存在时，推送回退帧并保持连接（不直接断开）
+        await websocket.accept()
+        logger.warning(f"[视频流] WebSocket 设备不存在, 使用回退帧: 设备={device_id}")
+        await _send_fallback_ws_frames(websocket, device_id, "未找到摄像头")
         return
 
     await websocket.accept()
@@ -140,13 +167,36 @@ async def get_device_snapshot(device_id: str):
     """返回当前设备的单帧 JPEG。"""
     device = _get_device(device_id)
     if not device:
-        return error_response("设备不存在", 404)
+        return Response(
+            content=_get_fallback_jpeg("未找到摄像头"),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-cache"},
+        )
 
     if not stream_manager.is_streaming(device_id):
         client_id = f"snap_{uuid.uuid4().hex[:8]}"
         stream_manager.add_client(device_id, client_id)
         stream_manager.start_camera(device_id, device.rtspUrl)
-        await asyncio.sleep(1.0)
+        # 等待摄像头连接并产生帧（最多 5 秒）
+        for _ in range(10):
+            await asyncio.sleep(0.5)
+            jpeg_bytes = await asyncio.get_event_loop().run_in_executor(
+                None,
+                stream_manager.get_jpeg_frame,
+                device_id,
+            )
+            if jpeg_bytes is not None:
+                return Response(
+                    content=jpeg_bytes,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=1"},
+                )
+        # 超时后返回回退帧
+        return Response(
+            content=_get_fallback_jpeg("摄像头连接超时"),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-cache"},
+        )
 
     jpeg_bytes = await asyncio.get_event_loop().run_in_executor(
         None,
@@ -156,7 +206,7 @@ async def get_device_snapshot(device_id: str):
 
     if not jpeg_bytes:
         return Response(
-            content=_create_minimal_jpeg(),
+            content=_get_fallback_jpeg(),
             media_type="image/jpeg",
             headers={"Cache-Control": "no-cache"},
         )

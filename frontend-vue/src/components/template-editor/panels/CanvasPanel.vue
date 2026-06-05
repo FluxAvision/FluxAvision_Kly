@@ -20,6 +20,7 @@ const componentMap: Record<string, any> = {
   'title': defineAsyncComponent(() => import('@/components/template-editor/widgets/TitleText.vue')),
   'text': defineAsyncComponent(() => import('@/components/template-editor/widgets/TitleText.vue')),
   'clock': defineAsyncComponent(() => import('@/components/template-editor/widgets/ClockWidget.vue')),
+  'video-wall': defineAsyncComponent(() => import('@/components/template-editor/widgets/VideoWall.vue')),
 }
 
 const props = defineProps<{
@@ -125,6 +126,12 @@ const componentDataMap = computed(() => {
   const map: Record<string, any> = {}
 
   for (const comp of sortedComponents.value) {
+    // 视频墙：传递所有设备列表，组件内部按 deviceIds 查找设备
+    if (comp.type === 'video-wall') {
+      map[comp.id] = { allDevices: data.allDevices.value }
+      continue
+    }
+
     if (!comp.dataSource || Object.keys(comp.dataSource).length === 0) {
       if (comp.type === 'metric-card' || comp.type === 'counter') {
         map[comp.id] = {

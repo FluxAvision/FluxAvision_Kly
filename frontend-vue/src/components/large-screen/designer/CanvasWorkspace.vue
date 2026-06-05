@@ -53,6 +53,7 @@ const componentMap: Record<string, Component> = {
   'logo': defineAsyncComponent(() => import('@/components/template-editor/widgets/LogoImage.vue')),
   'line': defineAsyncComponent(() => import('@/components/template-editor/widgets/LineShape.vue')),
   'ranking-counter': defineAsyncComponent(() => import('@/components/template-editor/widgets/RankingCounter.vue')),
+  'video-wall': defineAsyncComponent(() => import('@/components/template-editor/widgets/VideoWall.vue')),
 }
 
 // ═══ 画布计算属性 ═══════════════════════════════════════════════════════

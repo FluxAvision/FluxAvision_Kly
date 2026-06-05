@@ -85,13 +85,42 @@ function clearAll() {
   closeWebSocket()
   frameDecodingRef.value = false
   frameTokenRef.value = 0
+  // 重置 Canvas 为纯黑，避免组件复用或重新连接时显示脏数据
+  if (canvasRef.value) {
+    clearCanvasToBlack(canvasRef.value)
+  }
 }
 
 function buildWebSocketUrl(): string {
+  // 使用相对 URL，通过 Vite 开发代理或同端口静态服务连接后端
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const hostname = window.location.hostname
-  const backendPort = window.location.port === '3000' ? '15678' : window.location.port
-  return `${protocol}//${hostname}:${backendPort}/api/devices/${props.deviceId}/stream/ws`
+  return `${protocol}//${window.location.host}/api/devices/${props.deviceId}/stream/ws`
+}
+
+/**
+ * 用纯黑色填充 Canvas，防止 canvas 显示未初始化的像素数据。
+ * 在 canvas 可见之前调用，确保首帧不会出现垃圾像素。
+ */
+function clearCanvasToBlack(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+  }
+}
+
+/**
+ * 清空 Canvas 为透明黑色（然后填充纯黑背景）。
+ * 每次绘制新帧前调用，避免帧叠加或残留。
+ */
+function clearCanvasBeforeDraw(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // 填充纯黑背景，确保 canvas 在任何状态下都不显示未初始化像素
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+  }
 }
 
 /**
@@ -119,8 +148,11 @@ async function renderFrameToCanvas(blob: Blob, token: number): Promise<void> {
       canvas.width = bitmap.width
       canvas.height = bitmap.height
     }
+
     const ctx = canvas.getContext('2d')
     if (ctx) {
+      // 每次绘制前清空 Canvas，确保不会显示未初始化像素
+      clearCanvasBeforeDraw(canvas)
       ctx.drawImage(bitmap, 0, 0)
     }
     bitmap.close()
@@ -149,7 +181,11 @@ async function renderFrameToCanvas(blob: Blob, token: number): Promise<void> {
             canvas.height = img.naturalHeight
           }
           const ctx = canvas.getContext('2d')
-          if (ctx) ctx.drawImage(img, 0, 0)
+          if (ctx) {
+            // 每次绘制前清空 Canvas，避免帧残留
+            clearCanvasBeforeDraw(canvas)
+            ctx.drawImage(img, 0, 0)
+          }
           resolve()
         }
         img.onerror = () => {
@@ -161,7 +197,7 @@ async function renderFrameToCanvas(blob: Blob, token: number): Promise<void> {
       updateStatus('playing')
       retryCountRef.value = 0
     } catch {
-      // decode failed silently
+      // decode failed silently — canvas 应该保持当前状态（纯黑背景）
     }
   } finally {
     frameDecodingRef.value = false
@@ -172,6 +208,10 @@ function startPolling() {
   clearAll()
   usePollingRef.value = true
   updateStatus('connecting')
+  // 确保 Canvas 为纯黑，等待快照帧
+  if (canvasRef.value) {
+    clearCanvasToBlack(canvasRef.value)
+  }
 
   let consecutiveErrors = 0
 
@@ -214,6 +254,10 @@ function startWebSocket() {
   clearAll()
   usePollingRef.value = false
   updateStatus('connecting')
+  // 确保 Canvas 为纯黑，等待首帧到来
+  if (canvasRef.value) {
+    clearCanvasToBlack(canvasRef.value)
+  }
 
   const ws = new WebSocket(buildWebSocketUrl())
   ws.binaryType = 'blob'
@@ -225,6 +269,10 @@ function startWebSocket() {
 
   ws.onmessage = (event: MessageEvent) => {
     if (event.data instanceof Blob) {
+      // 过滤空/无效 Blob（<50 字节不可能为有效 JPEG），防止 createImageBitmap 解码非图像数据
+      if (event.data.size < 50) {
+        return
+      }
       const token = ++frameTokenRef.value
       renderFrameToCanvas(event.data, token)
     }
@@ -270,6 +318,11 @@ watch(() => props.deviceId, () => {
 })
 
 onMounted(() => {
+  // 初始化 Canvas 为纯黑，确保首次可见时不显示乱码/脏像素
+  if (canvasRef.value) {
+    clearCanvasToBlack(canvasRef.value)
+  }
+
   if (props.status === 'offline') {
     clearAll()
     statusRef.value = 'offline'

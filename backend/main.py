@@ -180,6 +180,7 @@ from routers import (
     license_router,
     seed_router,
     stream_router,
+    test_stream_router,
 )
 
 app.include_router(auth_router)
@@ -198,6 +199,7 @@ app.include_router(stream_router)
 app.include_router(traffic_collector_router)
 app.include_router(traffic_stats_router)
 app.include_router(device_push_router)
+app.include_router(test_stream_router)
 
 
 # ==================== 健康检查 ====================

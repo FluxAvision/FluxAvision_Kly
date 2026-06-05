@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多路视频流测试</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background: #0a1628;
+    color: #e0e6ed;
+    min-height: 100vh;
+  }
+  .header {
+    padding: 16px 24px;
+    background: linear-gradient(90deg, #0d1f3c, #0a1628);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #00d9ff;
+  }
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .controls label {
+    color: #8892a0;
+    font-size: 13px;
+  }
+  .controls select, .controls button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: #e0e6ed;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .controls select:hover, .controls button:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(0,217,255,0.3);
+  }
+  .controls button.primary {
+    background: rgba(0,217,255,0.2);
+    border-color: rgba(0,217,255,0.3);
+  }
+  .controls button.primary:hover {
+    background: rgba(0,217,255,0.3);
+  }
+  .controls button.danger {
+    background: rgba(255,68,68,0.15);
+    border-color: rgba(255,68,68,0.25);
+  }
+  .controls button.danger:hover {
+    background: rgba(255,68,68,0.3);
+  }
+  .controls input[type="number"] {
+    width: 56px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    color: #e0e6ed;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  /* Metrics Panel */
+  .metrics-bar {
+    padding: 10px 24px;
+    background: rgba(0,0,0,0.3);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .metric-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .metric-item .label {
+    color: #8892a0;
+  }
+  .metric-item .value {
+    color: #00d9ff;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .metric-item .value.green { color: #00ff88; }
+  .metric-item .value.yellow { color: #ff9500; }
+  .metric-item .value.red { color: #ff4444; }
+
+  /* Grid */
+  .video-grid {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+  }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .grid-8 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); }
+  .grid-16 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
+
+  .video-cell {
+    position: relative;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+    aspect-ratio: 16/9;
+  }
+  .video-cell canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .video-cell .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 10px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+    font-size: 11px;
+    color: rgba(255,255,255,0.8);
+    display: flex;
+    justify-content: space-between;
+  }
+  .video-cell .overlay .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .video-cell .overlay .status-dot.connected { background: #00ff88; }
+  .video-cell .overlay .status-dot.connecting { background: #ff9500; animation: pulse 1s infinite; }
+  .video-cell .overlay .status-dot.error { background: #ff4444; }
+  .video-cell .overlay .info {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+  }
+  .video-cell .fps-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #00d9ff;
+    font-variant-numeric: tabular-nums;
+  }
+  .video-cell .fps-badge.stable { color: #00ff88; }
+  .video-cell .fps-badge.warn { color: #ff9500; }
+  .video-cell .fps-badge.bad { color: #ff4444; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📹 多路视频流性能测试</h1>
+  <div class="controls">
+    <label>路数:</label>
+    <select id="streamCount">
+      <option value="1">1 路</option>
+      <option value="2" selected>2 路</option>
+      <option value="4">4 路</option>
+      <option value="8">8 路</option>
+      <option value="12">12 路</option>
+      <option value="16">16 路</option>
+    </select>
+    <button class="primary" onclick="startTest()">▶ 开始测试</button>
+    <button class="danger" onclick="stopTest()">■ 停止</button>
+    <button onclick="clearLog()">清除日志</button>
+  </div>
+</div>
+
+<div class="metrics-bar" id="metricsBar">
+  <div class="metric-item"><span class="label">测试状态:</span><span id="testStatus" class="value" style="color:#ff9500">未开始</span></div>
+  <div class="metric-item"><span class="label">后端线程:</span><span id="threadCount" class="value">0</span></div>
+  <div class="metric-item"><span class="label">WebSocket:</span><span id="wsCount" class="value">0</span></div>
+  <div class="metric-item"><span class="label">总计帧数:</span><span id="totalFrames" class="value">0</span></div>
+  <div class="metric-item"><span class="label">平均帧率:</span><span id="avgFps" class="value">0</span></div>
+  <div class="metric-item"><span class="label">卡顿率:</span><span id="stutterRate" class="value green">0%</span></div>
+</div>
+
+<div id="logArea" style="padding: 0 24px 8px; font-size: 11px; color: #8892a0; max-height: 60px; overflow-y: auto; border-bottom: 1px solid rgba(255,255,255,0.04);"></div>
+
+<div class="video-grid" id="videoGrid"></div>
+
+<script>
+// ===== 播放器管理 =====
+const players = {};
+const grid = document.getElementById('videoGrid');
+const logArea = document.getElementById('logArea');
+
+let testRunning = false;
+let performanceMonitor = null;
+
+function log(msg) {
+  const el = document.createElement('div');
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logArea.appendChild(el);
+  logArea.scrollTop = logArea.scrollHeight;
+  if (logArea.children.length > 50) logArea.removeChild(logArea.firstChild);
+}
+
+function clearLog() { logArea.innerHTML = ''; }
+
+// ===== Canvas Player =====
+function createPlayer(deviceId, index) {
+  const cell = document.createElement('div');
+  cell.className = 'video-cell';
+  cell.id = `cell-${deviceId}`;
+
+  cell.innerHTML = `
+    <div class="overlay">
+      <span><span class="status-dot connecting" id="dot-${deviceId}"></span>测试摄像头 ${String(index + 1).padStart(2, '0')}</span>
+      <span class="info" id="info-${deviceId}">连接中...</span>
+    </div>
+    <canvas id="canvas-${deviceId}"></canvas>
+    <div class="fps-badge" id="fps-${deviceId}">-- fps</div>
+  `;
+
+  grid.appendChild(cell);
+
+  const player = {
+    deviceId,
+    canvas: document.getElementById(`canvas-${deviceId}`),
+    dot: document.getElementById(`dot-${deviceId}`),
+    info: document.getElementById(`info-${deviceId}`),
+    fpsEl: document.getElementById(`fps-${deviceId}`),
+    ws: null,
+    frameCount: 0,
+    fps: 0,
+    lastFpsTime: Date.now(),
+    fpsFrameCount: 0,
+    connected: false,
+    reconnectTimer: null,
+    frameDecoding: false,
+    frameToken: 0,
+  };
+
+  return player;
+}
+
+function connectPlayer(player) {
+  if (player.ws) {
+    try { player.ws.close(); } catch(e) {}
+  }
+
+  player.dot.className = 'status-dot connecting';
+  player.info.textContent = '连接中...';
+  player.connected = false;
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${window.location.host}/api/devices/${player.deviceId}/stream/ws`;
+
+  try {
+    const ws = new WebSocket(url);
+    ws.binaryType = 'blob';
+    player.ws = ws;
+
+    ws.onopen = () => {
+      player.dot.className = 'status-dot connected';
+      player.info.textContent = '已连接';
+      player.connected = true;
+      player.frameCount = 0;
+      player.fpsFrameCount = 0;
+      player.lastFpsTime = Date.now();
+      log(`[${player.deviceId}] WebSocket 已连接`);
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data instanceof Blob && player.connected) {
+        const token = ++player.frameToken;
+        renderFrame(player, event.data, token);
+      }
+    };
+
+    ws.onerror = () => {
+      player.dot.className = 'status-dot error';
+      player.info.textContent = 'WS错误';
+      player.connected = false;
+      scheduleReconnect(player);
+    };
+
+    ws.onclose = () => {
+      if (player.connected) {
+        player.dot.className = 'status-dot connecting';
+        player.info.textContent = '断线重连...';
+        player.connected = false;
+        scheduleReconnect(player);
+      }
+    };
+  } catch(e) {
+    log(`[${player.deviceId}] 连接失败: ${e.message}`);
+    scheduleReconnect(player);
+  }
+}
+
+function scheduleReconnect(player) {
+  if (!testRunning) return;
+  if (player.reconnectTimer) clearTimeout(player.reconnectTimer);
+  player.reconnectTimer = setTimeout(() => {
+    if (testRunning) connectPlayer(player);
+  }, 2000);
+}
+
+async function renderFrame(player, blob, token) {
+  if (token !== player.frameToken) return;
+  if (player.frameDecoding) return; // 帧丢弃
+
+  player.frameDecoding = true;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    if (token !== player.frameToken) {
+      bitmap.close();
+      return;
+    }
+
+    const canvas = player.canvas;
+    if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+    }
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    player.frameCount++;
+    player.fpsFrameCount++;
+
+    // 帧率统计
+    const now = Date.now();
+    if (now - player.lastFpsTime >= 1000) {
+      const elapsed = (now - player.lastFpsTime) / 1000;
+      player.fps = Math.round(player.fpsFrameCount / elapsed);
+      player.lastFpsTime = now;
+      player.fpsFrameCount = 0;
+
+      const fpsVal = player.fps;
+      player.fpsEl.textContent = `${fpsVal} fps`;
+      player.fpsEl.className = `fps-badge ${fpsVal >= 12 ? 'stable' : fpsVal >= 8 ? 'warn' : 'bad'}`;
+    }
+  } catch(e) {
+    // 静默丢弃
+  } finally {
+    player.frameDecoding = false;
+  }
+}
+
+function disconnectPlayer(player) {
+  if (player.reconnectTimer) {
+    clearTimeout(player.reconnectTimer);
+    player.reconnectTimer = null;
+  }
+  if (player.ws) {
+    try {
+      player.ws.onclose = null;
+      player.ws.close();
+    } catch(e) {}
+    player.ws = null;
+  }
+  player.connected = false;
+  player.dot.className = 'status-dot error';
+  player.info.textContent = '已停止';
+}
+
+// ===== 测试控制 =====
+async function startTest() {
+  if (testRunning) await stopTest();
+
+  const count = parseInt(document.getElementById('streamCount').value);
+  log(`=== 开始测试: ${count} 路视频 ===`);
+  testRunning = true;
+  document.getElementById('testStatus').textContent = `创建 ${count} 路...`;
+  document.getElementById('testStatus').style.color = '#ff9500';
+
+  // 1. 请求后端创建测试设备
+  try {
+    const res = await fetch(`/api/test/streams/create?count=${count}`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) {
+      log(`创建测试设备失败: ${data.message}`);
+      testRunning = false;
+      document.getElementById('testStatus').textContent = '创建失败';
+      document.getElementById('testStatus').style.color = '#ff4444';
+      return;
+    }
+    log(`后端已创建 ${data.data.created} 路测试流`);
+  } catch(e) {
+    log(`后端请求失败: ${e.message}`);
+    testRunning = false;
+    return;
+  }
+
+  // 2. 创建播放器
+  grid.innerHTML = '';
+  grid.className = `video-grid grid-${Math.min(count, 16)}`;
+
+  for (let i = 0; i < count; i++) {
+    const deviceId = `test-cam-${String(i + 1).padStart(2, '0')}`;
+    const player = createPlayer(deviceId, i);
+    players[deviceId] = player;
+  }
+
+  // 3. 等待后端流启动
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  // 4. 连接所有WebSocket
+  for (const deviceId in players) {
+    connectPlayer(players[deviceId]);
+    await new Promise(resolve => setTimeout(resolve, 200)); // 错开连接避免风暴
+  }
+
+  document.getElementById('testStatus').textContent = `运行中 (${count}路)`;
+  document.getElementById('testStatus').style.color = '#00ff88';
+
+  // 5. 启动性能监控
+  if (performanceMonitor) clearInterval(performanceMonitor);
+  performanceMonitor = setInterval(updatePerformanceMetrics, 2000);
+
+  log(`=== 测试启动完成: ${count} 路 ===`);
+}
+
+async function stopTest() {
+  testRunning = false;
+  if (performanceMonitor) {
+    clearInterval(performanceMonitor);
+    performanceMonitor = null;
+  }
+
+  // 断开所有播放器
+  for (const deviceId in players) {
+    disconnectPlayer(players[deviceId]);
+  }
+
+  // 清除播放器
+  for (const deviceId in players) {
+    delete players[deviceId];
+  }
+
+  // 请求后端移除测试设备
+  try {
+    await fetch('/api/test/streams/remove-all', { method: 'POST' });
+    log('后端测试设备已清理');
+  } catch(e) {
+    log(`清理后端失败: ${e.message}`);
+  }
+
+  grid.innerHTML = '<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#8892a0;padding:40px;font-size:16px">测试已停止，点击「开始测试」重新开始</div>';
+  document.getElementById('testStatus').textContent = '已停止';
+  document.getElementById('testStatus').style.color = '#8892a0';
+  log('=== 测试已停止 ===');
+}
+
+async function updatePerformanceMetrics() {
+  if (!testRunning) return;
+
+  try {
+    // 查询后端状态
+    const res = await fetch('/api/test/streams/status');
+    const data = await res.json();
+    if (!data.success) return;
+
+    const status = data.data;
+    document.getElementById('threadCount').textContent = status.usedSlots || 0;
+
+    // 统计 WebSocket 连接数
+    let wsCount = 0;
+    for (const deviceId in players) {
+      if (players[deviceId].connected) wsCount++;
+    }
+    document.getElementById('wsCount').textContent = `${wsCount}/${Object.keys(players).length}`;
+
+    // 统计总帧数和平均帧率
+    let totalFrames = 0;
+    let fpsSum = 0;
+    let fpsCount = 0;
+    let stutterCount = 0;
+    let totalPlayers = 0;
+
+    for (const deviceId in players) {
+      const p = players[deviceId];
+      totalFrames += p.frameCount;
+      totalPlayers++;
+      if (p.fps > 0) {
+        fpsSum += p.fps;
+        fpsCount++;
+        if (p.fps < 10) stutterCount++;
+      }
+    }
+
+    document.getElementById('totalFrames').textContent = totalFrames.toLocaleString();
+    const avgFps = fpsCount > 0 ? (fpsSum / fpsCount).toFixed(1) : '0';
+    document.getElementById('avgFps').textContent = `${avgFps} fps`;
+
+    const stutterPct = totalPlayers > 0 ? Math.round(stutterCount / totalPlayers * 100) : 0;
+    const stutterEl = document.getElementById('stutterRate');
+    stutterEl.textContent = `${stutterPct}%`;
+    stutterEl.className = `value ${stutterPct <= 10 ? 'green' : stutterPct <= 30 ? 'yellow' : 'red'}`;
+  } catch(e) {
+    // 静默忽略
+  }
+}
+
+// 页面关闭时清理
+window.addEventListener('beforeunload', () => {
+  if (testRunning) {
+    // 同步清理
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/test/streams/remove-all', false);
+    xhr.send();
+  }
+});
+
+log('测试页面已加载，选择路数后点击「开始测试」');
+</script>
+</body>
+</html>

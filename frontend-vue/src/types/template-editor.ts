@@ -17,6 +17,7 @@ export type ComponentType =
   | 'logo'          // Logo图片
   | 'line'          // 线条
   | 'ranking-counter'  // 排名计数器
+  | 'video-wall'    // 视频墙
 
 /** 数据源类型 */
 export type DataSourceType = 'metric' | 'device' | 'hourly' | 'static'
@@ -307,6 +308,30 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     category: 'metric',
     defaultProps: { leftText: '您是第', rightText: '位到访的客户', digits: 6, counterFontSize: 20, textColor: '#ffffff', counterColor: '#00d9ff' },
     defaultSize: { width: 500, height: 80 },
+  },
+  // 视频墙
+  {
+    type: 'video-wall',
+    name: '视频墙',
+    icon: 'monitor',
+    category: 'video',
+    defaultProps: {
+      gridCols: 2,
+      gridRows: 1,
+      // 每个格子关联的设备信息（按顺序排列）
+      cellDeviceIds: [''],
+      cellDeviceNames: [''],
+      cellDeviceIps: [''],
+      cellRtspUrls: [''],
+      autoPlay: true,
+      muted: true,
+      // 边框样式
+      cellBorderWidth: 1,
+      cellBorderColor: '#1e293b',
+      // 无视频时的背景
+      placeholderBg: '#0d1421',
+    },
+    defaultSize: { width: 800, height: 400 },
   },
 ]
 

@@ -27,6 +27,13 @@ JPEG_QUALITY = 70
 CAPTURE_IDLE_SLEEP = 0.005
 STALE_FRAME_SECONDS = 3.0
 
+# ===== 回退画面参数 =====
+# 当 RTSP 无法连接或无设备时，生成合成帧确保画面不黑屏
+FALLBACK_FRAME_ENABLED = True
+FALLBACK_FRAME_FPS = 2  # 回退帧率（静态帧无需高帧率）
+FALLBACK_FRAME_WIDTH = 640
+FALLBACK_FRAME_HEIGHT = 360
+
 # ===== 优化参数 =====
 # 预览流缩放宽度。将 RTSP 原始帧缩放到此宽度（保持宽高比），
 # 大幅减少 JPEG 尺寸（约 80-90%）、网络传输量和浏览器解码开销。
@@ -63,6 +70,9 @@ class CameraSession:
     frame_count: int = 0
     # 用于帧率控制：上次编码的时间戳
     last_encode_time: float = 0.0
+    # 回退模式：True 表示 RSTP 连接失败，使用合成回退帧
+    fallback_mode: bool = False
+    fallback_message: str = ""
 
 
 class StreamManager:
@@ -147,14 +157,20 @@ class StreamManager:
             session.rtsp_url = rtsp_url
             session.is_running = True
             session.reconnect_count = 0
+
+            # 检测是否为测试流（test:// 前缀）
+            is_test = rtsp_url.startswith('test://')
+            target_fn = self._synthetic_capture_loop if is_test else self._capture_loop
+
             session.capture_thread = threading.Thread(
-                target=self._capture_loop,
+                target=target_fn,
                 args=(device_id,),
                 daemon=True,
                 name=f"Camera-{device_id[:8]}",
             )
             session.capture_thread.start()
-            logger.info(f"摄像头采集已启动: 设备={device_id}")
+            mode = "测试流" if is_test else "RTSP"
+            logger.info(f"摄像头采集已启动: 设备={device_id}, 模式={mode}")
             return True
 
     def _capture_loop(self, device_id: str):
@@ -205,7 +221,18 @@ class StreamManager:
         # 帧率控制：相邻两帧编码的最小间隔
         min_frame_interval = 1.0 / CAPTURE_FPS
 
+        # 回退帧率间隔
+        fallback_frame_interval = 1.0 / FALLBACK_FRAME_FPS
+
         while session.is_running:
+            # 如果 RTSP URL 为空，直接进入回退模式
+            if not session.rtsp_url:
+                logger.info(f"设备 {device_id} 无 RTSP URL，进入回退模式")
+                session.fallback_mode = True
+                session.fallback_message = "未配置摄像头"
+                self._fallback_loop(session, device_id, encode_params, fallback_frame_interval)
+                continue
+
             if session.cap is not None:
                 try:
                     session.cap.release()
@@ -230,9 +257,11 @@ class StreamManager:
                 logger.error(f"无法打开 RTSP 流: {session.rtsp_url[:80]}")
                 session.reconnect_count += 1
                 if session.reconnect_count >= MAX_RECONNECT:
-                    logger.error(f"设备 {device_id} RTSP 重连失败次数已耗尽")
-                    session.is_running = False
-                    break
+                    logger.error(f"设备 {device_id} RTSP 重连失败次数已耗尽，进入回退模式")
+                    session.fallback_mode = True
+                    session.fallback_message = "摄像头离线"
+                    self._fallback_loop(session, device_id, encode_params, fallback_frame_interval)
+                    continue  # 回退结束后（is_running=False）退出外层循环
                 self._sleep_with_cancel(session, RECONNECT_INTERVAL)
                 continue
 
@@ -317,6 +346,249 @@ class StreamManager:
                 )
                 self._sleep_with_cancel(session, RECONNECT_INTERVAL)
 
+    def _fallback_loop(
+        self,
+        session: CameraSession,
+        device_id: str,
+        encode_params: list,
+        frame_interval: float,
+    ):
+        """
+        回退采集循环：当 RTSP 连接失败或无 RTSP URL 时，
+        生成合成的回退帧（带文字提示），确保前端不黑屏。
+        """
+        logger.info(f"设备 {device_id} 进入回退模式 (消息={session.fallback_message})")
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            logger.error(f"设备 {device_id} 回退模式初始化失败: 缺少 cv2/numpy")
+            return
+
+        # 回退运行最多 300 秒后自动退出（防止永不停止）
+        fallback_start = time.time()
+        max_fallback_duration = 300
+
+        while session.is_running and session.fallback_mode:
+            # 超时停止回退
+            if time.time() - fallback_start > max_fallback_duration:
+                logger.info(f"设备 {device_id} 回退模式超时({max_fallback_duration}s)，停止采集")
+                break
+
+            now = time.time()
+
+            # 生成合成帧
+            try:
+                import cv2
+                import numpy as np
+
+                # 创建深色背景
+                frame = np.zeros((FALLBACK_FRAME_HEIGHT, FALLBACK_FRAME_WIDTH, 3), dtype=np.uint8)
+                # 深蓝黑色背景
+                frame[:] = (10, 25, 49)  # BGR
+
+                # 绘制提示文字
+                message = session.fallback_message or "视频待配置"
+                font = cv2.FONT_HERSHEY_SIMPLEX
+
+                # 文字大小和位置
+                text_scale = 0.9
+                text_thickness = 2
+                text_color = (217, 217, 255)  # 浅灰色 (BGR)
+
+                # 计算文字居中
+                text_size = cv2.getTextSize(message, font, text_scale, text_thickness)[0]
+                text_x = (FALLBACK_FRAME_WIDTH - text_size[0]) // 2
+                text_y = (FALLBACK_FRAME_HEIGHT + text_size[1]) // 2
+
+                # 绘制文字（带半透明背景）
+                cv2.rectangle(
+                    frame,
+                    (text_x - 16, text_y - text_size[1] - 12),
+                    (text_x + text_size[0] + 16, text_y + 8),
+                    (0, 0, 0, 128),
+                    -1,
+                )
+                cv2.putText(
+                    frame, message,
+                    (text_x, text_y),
+                    font, text_scale, text_color, text_thickness, cv2.LINE_AA,
+                )
+
+                # 添加小字提示
+                sub_msg = "实时视频待配置"
+                sub_scale = 0.5
+                sub_size = cv2.getTextSize(sub_msg, font, sub_scale, 1)[0]
+                sub_x = (FALLBACK_FRAME_WIDTH - sub_size[0]) // 2
+                sub_y = text_y + text_size[1] + 36
+                cv2.putText(
+                    frame, sub_msg,
+                    (sub_x, sub_y),
+                    font, sub_scale, (160, 146, 137), 1, cv2.LINE_AA,
+                )
+
+                # 编码为 JPEG
+                ok, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
+                if ok:
+                    jpeg_bytes = jpeg_data.tobytes()
+                    with session.frame_lock:
+                        session.latest_jpeg = jpeg_bytes
+                        session.last_frame_time = now
+                        session.frame_count += 1
+                        session.last_encode_time = now
+            except Exception as e:
+                logger.error(f"设备 {device_id} 回退帧生成失败: {e}")
+
+            # 等待下一帧（低帧率）
+            elapsed = time.time() - now
+            sleep_time = max(0, frame_interval - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        # 回退模式结束
+        session.fallback_mode = False
+        logger.info(f"设备 {device_id} 回退模式结束")
+
+    # ===== 测试用色板：不同设备使用不同颜色 =====
+    _TEST_COLORS = [
+        (0, 180, 255),    # 暖橙
+        (200, 200, 0),    # 青色
+        (80, 80, 255),    # 红色
+        (200, 200, 100),  # 浅蓝
+        (80, 255, 80),    # 绿色
+        (210, 150, 255),  # 粉色
+        (50, 130, 255),   # 橙色
+        (200, 80, 80),    # 深蓝
+        (60, 200, 255),   # 金色
+        (255, 100, 100),  # 浅红
+        (180, 60, 0),     # 深青
+        (200, 50, 130),   # 紫色
+        (255, 255, 100),  # 浅黄
+        (0, 100, 200),    # 中蓝
+        (0, 200, 150),    # 青绿
+        (100, 180, 255),  # 杏色
+    ]
+
+    def _synthetic_capture_loop(self, device_id: str):
+        """
+        合成帧采集循环。
+        当 RTSP URL 以 test:// 开头时使用，生成动态彩色测试图案。
+        用于多路视频性能测试。
+        """
+        logger.info(f"[合成流] 启动: 设备={device_id}")
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as e:
+            logger.error(f"[合成流] 缺少依赖: {e}")
+            return
+
+        session = self._sessions.get(device_id)
+        if not session:
+            return
+
+        encode_params = [
+            int(cv2.IMWRITE_JPEG_QUALITY), int(JPEG_QUALITY),
+            int(cv2.IMWRITE_JPEG_OPTIMIZE), 1,
+        ]
+
+        min_frame_interval = 1.0 / CAPTURE_FPS
+        width, height = SCALE_WIDTH or 640, 360
+
+        # 根据设备编号选择固定颜色
+        try:
+            idx = int(device_id.split('-')[-1]) - 1
+        except (ValueError, IndexError):
+            idx = 0
+        color = self._TEST_COLORS[idx % len(self._TEST_COLORS)]
+
+        frame_counter = 0
+        start_time = time.time()
+
+        while session.is_running:
+            now = time.time()
+
+            if now - session.last_encode_time < min_frame_interval:
+                time.sleep(CAPTURE_IDLE_SLEEP)
+                continue
+
+            frame_counter += 1
+            elapsed = int(now - start_time)
+
+            # 生成动态测试图案
+            frame = np.zeros((height, width, 3), dtype=np.uint8)
+            frame[:] = color  # BGR 底色
+
+            # 绘制渐变条（动态移动）
+            bar_shift = (frame_counter * 3) % width
+            for x in range(0, width, 40):
+                x_pos = (x + bar_shift) % width
+                cv2.line(
+                    frame,
+                    (x_pos, 0), (x_pos, height),
+                    (min(255, color[0] + 50),
+                     min(255, color[1] + 50),
+                     min(255, color[2] + 50)),
+                    2,
+                )
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+
+            # 设备名称（大字居中）
+            dev_name = f"测试摄像头 {idx + 1:02d}"
+            text_size = cv2.getTextSize(dev_name, font, 1.2, 2)[0]
+            text_x = (width - text_size[0]) // 2
+            text_y = height // 2 - 20
+            # 文字背景
+            cv2.rectangle(
+                frame,
+                (text_x - 10, text_y - text_size[1] - 10),
+                (text_x + text_size[0] + 10, text_y + 10),
+                (0, 0, 0, 160),
+                -1,
+            )
+            cv2.putText(
+                frame, dev_name,
+                (text_x, text_y),
+                font, 1.2, (255, 255, 255), 2, cv2.LINE_AA,
+            )
+
+            # 帧数/时间信息（小字右下）
+            info = f"帧 #{frame_counter} | 运行 {elapsed}s | 15fps"
+            cv2.putText(
+                frame, info,
+                (12, height - 20),
+                font, 0.5, (200, 200, 200), 1, cv2.LINE_AA,
+            )
+
+            # 设备ID（小字左上角）
+            cv2.putText(
+                frame, device_id,
+                (12, 28),
+                font, 0.5, (180, 180, 180), 1, cv2.LINE_AA,
+            )
+
+            # 编码为 JPEG
+            jpeg_bytes = None
+            try:
+                ok, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
+                if ok:
+                    jpeg_bytes = jpeg_data.tobytes()
+            except Exception as e:
+                logger.error(f"[合成流] JPEG 编码失败 (设备={device_id}): {e}")
+
+            if jpeg_bytes:
+                with session.frame_lock:
+                    session.latest_frame = frame
+                    session.latest_jpeg = jpeg_bytes
+                    session.last_frame_time = now
+                    session.frame_count = frame_counter
+                session.last_encode_time = now
+
+            time.sleep(CAPTURE_IDLE_SLEEP)
+
+        logger.info(f"[合成流] 停止: 设备={device_id}, 总帧数={frame_counter}")
+
     def _sleep_with_cancel(self, session: CameraSession, seconds: int):
         """可中断等待。"""
         for _ in range(int(seconds / 0.5)):
@@ -337,10 +609,80 @@ class StreamManager:
 
         with session.frame_lock:
             if session.latest_jpeg is None:
+                # 回退模式也没有帧，但我们可以返回一个全新的 fallback 帧
+                if FALLBACK_FRAME_ENABLED:
+                    fb = self._generate_standalone_fallback(
+                        session.fallback_message or "视频待配置"
+                    )
+                    if fb is not None:
+                        return fb, session.frame_count
                 return None, session.frame_count
             if time.time() - session.last_frame_time > STALE_FRAME_SECONDS:
+                # 帧过期了，尝试生成回退帧
+                if FALLBACK_FRAME_ENABLED:
+                    fb = self._generate_standalone_fallback(
+                        session.fallback_message or "视频待配置"
+                    )
+                    if fb is not None:
+                        return fb, session.frame_count
                 return None, session.frame_count
             return session.latest_jpeg, session.frame_count
+
+    def _generate_standalone_fallback(self, message: str = "视频待配置") -> Optional[bytes]:
+        """
+        生成独立的回退 JPEG 帧（可单独调用，不依赖 session）。
+        用于 get_jpeg_frame_with_meta 的兜底返回。
+        """
+        try:
+            import cv2
+            import numpy as np
+
+            frame = np.zeros((FALLBACK_FRAME_HEIGHT, FALLBACK_FRAME_WIDTH, 3), dtype=np.uint8)
+            frame[:] = (10, 25, 49)
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            text_scale = 0.9
+            text_thickness = 2
+            text_color = (217, 217, 255)
+
+            text_size = cv2.getTextSize(message, font, text_scale, text_thickness)[0]
+            text_x = (FALLBACK_FRAME_WIDTH - text_size[0]) // 2
+            text_y = (FALLBACK_FRAME_HEIGHT + text_size[1]) // 2
+
+            cv2.rectangle(
+                frame,
+                (text_x - 16, text_y - text_size[1] - 12),
+                (text_x + text_size[0] + 16, text_y + 8),
+                (0, 0, 0, 128),
+                -1,
+            )
+            cv2.putText(
+                frame, message,
+                (text_x, text_y),
+                font, text_scale, text_color, text_thickness, cv2.LINE_AA,
+            )
+
+            sub_msg = "实时视频待配置"
+            sub_scale = 0.5
+            sub_size = cv2.getTextSize(sub_msg, font, sub_scale, 1)[0]
+            sub_x = (FALLBACK_FRAME_WIDTH - sub_size[0]) // 2
+            sub_y = text_y + text_size[1] + 36
+            cv2.putText(
+                frame, sub_msg,
+                (sub_x, sub_y),
+                font, sub_scale, (160, 146, 137), 1, cv2.LINE_AA,
+            )
+
+            encode_params = [
+                int(cv2.IMWRITE_JPEG_QUALITY), int(JPEG_QUALITY),
+                int(cv2.IMWRITE_JPEG_OPTIMIZE), 1,
+            ]
+            ok, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
+            if ok:
+                return jpeg_data.tobytes()
+        except Exception as e:
+            logger.error(f"独立回退帧生成失败: {e}")
+        return None
 
     def _release_camera(self, device_id: str):
         """释放摄像头资源。"""

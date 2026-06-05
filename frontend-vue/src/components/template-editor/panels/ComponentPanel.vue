@@ -5,7 +5,7 @@
 import { computed } from 'vue'
 import {
   Square, Sparkles, CreditCard, Hash, TrendingUp, BarChart2,
-  Video, Type, FileText, Clock,
+  Video, Type, FileText, Clock, Monitor,
 } from 'lucide-vue-next'
 import type { ComponentDefinition } from '@/types/template-editor'
 import { COMPONENT_DEFINITIONS } from '@/types/template-editor'
@@ -26,6 +26,7 @@ const iconMap: Record<string, any> = {
   type: Type,
   'file-text': FileText,
   clock: Clock,
+  monitor: Monitor,
 }
 
 // 分组

@@ -103,6 +103,58 @@ const selectedDeviceName = computed(() => {
   return device?.name || null
 })
 
+// 获取视频墙设备ID数组（从 cellDeviceIds）
+function getVideoWallDeviceIds() {
+  const ids = props.component?.props?.cellDeviceIds ?? []
+  const cols = props.component?.props?.gridCols ?? 2
+  const rows = props.component?.props?.gridRows ?? 1
+  const total = cols * rows
+  while (ids.length < total) ids.push('')
+  return ids.slice(0, total)
+}
+
+// 批量更新视频墙格子设备信息（id/name/ip/rtspUrl 四个数组同时更新）
+function updateVideoWallCell(index: number, deviceId: string) {
+  if (!props.component) return
+  const device = devices.value.find(d => d.id === deviceId)
+
+  // cellDeviceIds
+  const ids = props.component.props?.cellDeviceIds ? [...props.component.props.cellDeviceIds] : []
+  while (ids.length <= index) ids.push('')
+  ids[index] = deviceId
+  updateProp('cellDeviceIds', ids)
+
+  // cellDeviceNames
+  const names = props.component.props?.cellDeviceNames ? [...props.component.props.cellDeviceNames] : []
+  while (names.length <= index) names.push('')
+  names[index] = device?.name || ''
+  updateProp('cellDeviceNames', names)
+
+  // cellDeviceIps
+  const ips = props.component.props?.cellDeviceIps ? [...props.component.props.cellDeviceIps] : []
+  while (ips.length <= index) ips.push('')
+  ips[index] = device?.ip || ''
+  updateProp('cellDeviceIps', ips)
+
+  // cellRtspUrls
+  const rtspUrls = props.component.props?.cellRtspUrls ? [...props.component.props.cellRtspUrls] : []
+  while (rtspUrls.length <= index) rtspUrls.push('')
+  rtspUrls[index] = (device as any)?.rtspUrl || ''
+  updateProp('cellRtspUrls', rtspUrls)
+}
+
+// 同步视频墙所有数组到新的宫格数量
+function syncVideoWallArrays(newCount: number) {
+  if (!props.component) return
+  const fields = ['cellDeviceIds', 'cellDeviceNames', 'cellDeviceIps', 'cellRtspUrls'] as const
+  for (const field of fields) {
+    const arr = props.component.props?.[field] ? [...props.component.props[field]] : []
+    while (arr.length < newCount) arr.push('')
+    while (arr.length > newCount) arr.pop()
+    updateProp(field, arr)
+  }
+}
+
 // 边框类型选项
 const borderTypes = [
   { value: 'dv-border-box-1', label: '边框1' },
@@ -434,6 +486,108 @@ onMounted(() => {
             />
             自动播放
           </label>
+        </div>
+      </div>
+
+      <!-- ── 视频墙属性 ── -->
+      <div v-if="component.type === 'video-wall'" class="space-y-3">
+        <h4 class="text-xs text-[#8892a0]">视频墙设置</h4>
+
+        <!-- 宫格布局 -->
+        <div>
+          <label class="text-xs text-[#8892a0]">宫格布局</label>
+          <select
+            :value="`${component.props?.gridCols || 2}x${component.props?.gridRows || 1}`"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1.5 text-sm text-white"
+            @change="(e) => {
+              const [cols, rows] = (e.target as HTMLSelectElement).value.split('x').map(Number)
+              updateProp('gridCols', cols)
+              updateProp('gridRows', rows)
+              syncVideoWallArrays(cols * rows)
+            }"
+          >
+            <option value="1x1">1 宫格 (1x1)</option>
+            <option value="2x1">2 宫格 (1行2列)</option>
+            <option value="2x2">4 宫格 (2x2)</option>
+            <option value="3x2">6 宫格 (3列2行)</option>
+            <option value="4x2">8 宫格 (4列2行)</option>
+            <option value="3x3">9 宫格 (3x3)</option>
+          </select>
+        </div>
+
+        <!-- 每个格子的设备选择 -->
+        <div v-for="(deviceId, index) in getVideoWallDeviceIds()" :key="index">
+          <label class="text-xs text-[#8892a0]">格子 {{ index + 1 }} 选择设备</label>
+          <select
+            :value="deviceId || ''"
+            class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1.5 text-sm text-white"
+            @change="(e) => updateVideoWallCell(index, (e.target as HTMLSelectElement).value)"
+          >
+            <option value="">请选择设备</option>
+            <option v-for="d in devices" :key="d.id" :value="d.id">
+              {{ d.name }} - {{ d.ip }}
+            </option>
+          </select>
+          <p v-if="devices.length === 0" class="text-xs text-[#8892a0] mt-1">
+            暂无设备，请先在设备管理中添加
+          </p>
+        </div>
+
+        <!-- 自动播放和静音 -->
+        <div class="flex gap-4">
+          <label class="flex items-center gap-1.5 text-xs text-[#8892a0]">
+            <input
+              type="checkbox"
+              :checked="component.props?.autoPlay ?? true"
+              @change="(e) => updateProp('autoPlay', (e.target as HTMLInputElement).checked)"
+              class="accent-[#00d9ff]"
+            />
+            自动播放
+          </label>
+          <label class="flex items-center gap-1.5 text-xs text-[#8892a0]">
+            <input
+              type="checkbox"
+              :checked="component.props?.muted ?? true"
+              @change="(e) => updateProp('muted', (e.target as HTMLInputElement).checked)"
+              class="accent-[#00d9ff]"
+            />
+            静音
+          </label>
+        </div>
+
+        <!-- 边框样式 -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-[#8892a0]">边框宽度</label>
+            <input
+              type="number"
+              :value="component.props?.cellBorderWidth ?? 1"
+              min="0"
+              max="10"
+              class="w-full bg-[#112240] border border-[#1e293b] rounded px-2 py-1 text-sm text-white"
+              @input="(e) => updateProp('cellBorderWidth', Number((e.target as HTMLInputElement).value))"
+            />
+          </div>
+          <div>
+            <label class="text-xs text-[#8892a0]">边框颜色</label>
+            <input
+              type="color"
+              :value="component.props?.cellBorderColor || '#1e293b'"
+              class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+              @input="(e) => updateProp('cellBorderColor', (e.target as HTMLInputElement).value)"
+            />
+          </div>
+        </div>
+
+        <!-- 无视频时的背景色 -->
+        <div>
+          <label class="text-xs text-[#8892a0]">无视频源背景色</label>
+          <input
+            type="color"
+            :value="component.props?.placeholderBg || '#0d1421'"
+            class="w-full h-8 bg-[#112240] border border-[#1e293b] rounded"
+            @input="(e) => updateProp('placeholderBg', (e.target as HTMLInputElement).value)"
+          />
         </div>
       </div>
 
