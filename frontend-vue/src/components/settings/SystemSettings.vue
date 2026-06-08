@@ -11,6 +11,8 @@ const metricOptions = [
   { key: 'monthIn', label: '本月进' },
   { key: 'weekOut', label: '本周出' },
   { key: 'monthOut', label: '本月出' },
+  { key: 'yearIn', label: '本年进' },
+  { key: 'yearOut', label: '本年出' },
   { key: 'totalIn', label: '累计进' },
   { key: 'totalOut', label: '累计出' },
 ]

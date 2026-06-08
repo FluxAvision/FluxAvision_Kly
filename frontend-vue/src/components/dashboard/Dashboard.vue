@@ -49,6 +49,8 @@ interface DashboardApiData {
     weekOut: number
     monthIn: number
     monthOut: number
+    yearIn: number
+    yearOut: number
     totalIn: number
     totalOut: number
   }
@@ -77,6 +79,8 @@ const metricConfig: Record<string, MetricConfigItem> = {
   weekOut: { label: '本周出', icon: markRaw(TrendingDown), bgColor: 'rgba(168, 85, 247, 0.1)' },
   monthIn: { label: '本月进', icon: markRaw(CalendarDays), bgColor: 'rgba(244, 63, 94, 0.1)' },
   monthOut: { label: '本月出', icon: markRaw(CalendarDays), bgColor: 'rgba(249, 115, 22, 0.1)' },
+  yearIn: { label: '本年进', icon: markRaw(TrendingUp), bgColor: 'rgba(34, 197, 94, 0.1)' },
+  yearOut: { label: '本年出', icon: markRaw(TrendingDown), bgColor: 'rgba(239, 68, 68, 0.1)' },
   totalIn: { label: '累计进人数', icon: markRaw(Hash), bgColor: 'rgba(6, 182, 212, 0.1)' },
   totalOut: { label: '累计出人数', icon: markRaw(Hash), bgColor: 'rgba(16, 185, 129, 0.1)' },
 }
