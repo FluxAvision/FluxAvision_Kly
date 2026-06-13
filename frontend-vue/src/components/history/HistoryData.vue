@@ -163,6 +163,12 @@
           </button>
         </div>
       </div>
+      <!-- 门店汇总视图提示 -->
+      <div v-if="dimension === 'hour' && isStoreView" class="mb-3 px-3 py-2 bg-[#1e293b]/50 rounded-md border border-[#1e293b]">
+        <p class="text-xs text-[#8892a0]">
+          <span class="text-[#f59e0b]">提示：</span>当前为门店汇总视图（所有设备数据之和），如需修改小时数据请在设备筛选中选择具体设备后编辑。
+        </p>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -171,7 +177,7 @@
               <th class="text-right py-2 px-3 text-[#00d9ff] font-medium">进入</th>
               <th class="text-right py-2 px-3 text-[#00ff88] font-medium">出去</th>
               <th class="text-right py-2 px-3 text-[#4a9eff] font-medium">净流入</th>
-              <th v-if="dimension === 'hour'" class="text-center py-2 px-3 text-[#8892a0] font-medium" style="width: 100px">操作</th>
+              <th v-if="dimension === 'hour' && !isStoreView" class="text-center py-2 px-3 text-[#8892a0] font-medium" style="width: 100px">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -210,7 +216,7 @@
               <td class="py-2 px-3 text-right" :class="(row.countIn - row.countOut) >= 0 ? 'text-[#00d9ff]' : 'text-[#f59e0b]'">
                 {{ Math.max(0, row.countIn - row.countOut).toLocaleString() }}
               </td>
-              <td v-if="dimension === 'hour'" class="py-2 px-3 text-center">
+              <td v-if="dimension === 'hour' && !isStoreView" class="py-2 px-3 text-center">
                 <template v-if="editingRowIndex === (currentPage - 1) * PAGE_SIZE + idx">
                   <button
                     @click="saveEdit(row.label)"
@@ -599,9 +605,14 @@ async function saveEdit(label: string) {
     if (res.ok) {
       editingRowIndex.value = null
       await fetchData()  // 刷新数据
+    } else {
+      const errBody = await res.json().catch(() => ({ message: `请求失败 (${res.status})` }))
+      console.error('修正保存失败:', errBody)
+      alert('保存失败: ' + (errBody.message || `HTTP ${res.status}`))
     }
-  } catch {
-    // 静默失败
+  } catch (e) {
+    console.error('修正保存异常:', e)
+    alert('保存失败，请检查网络连接')
   } finally {
     correcting.value = false
   }
