@@ -427,24 +427,44 @@ class DahuaPeopleCounter:
     # ── 消费循环（分发队列数据到回调） ───────────────────────────────────────
 
     def _consume_loop(self):
+        """消费队列循环
+
+        优化：
+        - 使用 blocking get(timeout) 替代 get_nowait + sleep，减少空转 CPU
+        - 队列有数据时立即处理，无数据时阻塞等待（最大 10ms）
+        - 增加 timing 日志，方便诊断延迟
+        """
         while self._running:
             consumed = False
             try:
-                snap = self._flow_queue.get_nowait()
+                snap = self._flow_queue.get(timeout=0.01)
+                t0 = time.perf_counter()
                 if self.on_flow_update:
                     self.on_flow_update(snap)
+                elapsed = time.perf_counter() - t0
+                if elapsed > 0.1:  # >100ms 记录警告
+                    logger.warning(
+                        f"[Latency] flow_update 耗时 {elapsed*1000:.1f}ms"
+                        f" 今日进={snap.entered_today} 出={snap.exited_today}"
+                    )
                 consumed = True
             except queue.Empty:
                 pass
             try:
-                face = self._face_queue.get_nowait()
+                face = self._face_queue.get(timeout=0.01)
+                t0 = time.perf_counter()
                 if self.on_face_detected:
                     self.on_face_detected(face)
+                elapsed = time.perf_counter() - t0
+                if elapsed > 0.05:  # >50ms 记录警告
+                    logger.warning(
+                        f"[Latency] face_detected 耗时 {elapsed*1000:.1f}ms"
+                    )
                 consumed = True
             except queue.Empty:
                 pass
             if not consumed:
-                time.sleep(0.005)
+                time.sleep(0.002)  # 双队列都空时短暂休眠，降低 CPU
 
 
 # ─── FluxaVision 多摄像头汇聚层 ──────────────────────────────────────────────

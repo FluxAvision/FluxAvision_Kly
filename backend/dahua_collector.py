@@ -20,7 +20,7 @@ import logging
 import threading
 import time
 from datetime import datetime, date
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Tuple
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,11 @@ class DahuaTrafficCollector:
     MAX_BACKOFF = 30
     BACKOFF_MULTIPLIER = 2
 
+    # 累计统计写入节流间隔（秒）
+    CUMULATIVE_WRITE_INTERVAL = 3
+    # 增量记录缓存 flush 间隔（秒）
+    RECORD_FLUSH_INTERVAL = 2
+
     def __init__(self):
         self._initialized = False
         self._devices: Dict[str, DeviceStateManager] = {}
@@ -94,6 +99,13 @@ class DahuaTrafficCollector:
         self._lock = threading.Lock()
         self._hourly_aggregator = HourlyAggregator()
         self._daily_aggregator = DailyAggregator()
+
+        # 累计写节流计时（device_id → 上次写入时间戳）
+        self._last_cumulative_write: Dict[str, float] = {}
+
+        # 增量记录缓存：device_id → (date, hour, accumulated_in, accumulated_out)
+        self._pending_records: Dict[str, Tuple[str, int, int, int]] = {}
+        self._last_record_flush: Dict[str, float] = {}
 
     @property
     def available(self) -> bool:
@@ -146,12 +158,16 @@ class DahuaTrafficCollector:
             state = self._devices.pop(device_id, None)
             if not state:
                 logger.info(f"[{device_id}] 未在采集中")
+                # 清理缓存的记录
+                self._flush_pending_records(device_id)
                 return True
 
             state.state = "stopped"
             state.stop_event.set()
             self._stop_counter(device_id)
 
+        # 停止前 flush 缓存中的增量记录
+        self._flush_pending_records(device_id)
         logger.info(f"[{device_id}] 客流采集已停止")
         return True
 
@@ -169,6 +185,9 @@ class DahuaTrafficCollector:
         device_ids = list(self._devices.keys())
         for device_id in device_ids:
             self.stop(device_id)
+
+        # flush 所有剩余缓存
+        self._flush_all_pending_records()
 
         if self._flux:
             try:
@@ -375,18 +394,25 @@ class DahuaTrafficCollector:
                 self._counters.pop(device_id, None)
 
     def _on_flow_update(self, device_id: str, snap: PeopleFlowSnapshot):
-        """处理客流数据更新"""
+        """处理客流数据更新
+
+        优化：
+        - 锁内仅更新内存状态（微秒级）
+        - DB 写入移至锁外，累计写入按 3 秒节流
+        - 增量记录缓存后按 2 秒批量 flush
+        """
         try:
             now = datetime.now()
             current_date = now.strftime("%Y-%m-%d")
             current_hour = now.hour
 
+            # ── 阶段1: 锁内更新内存状态（微秒级操作） ──
             with self._lock:
                 state = self._devices.get(device_id)
                 if not state or state.state != "connected":
                     return
 
-                # 检查日期变化
+                # 检查日期变化 → 结算小时/日统计（发生频率极低，可接受）
                 if state.today_date != current_date:
                     self._finalize_hourly_stats(device_id, state)
                     self._finalize_daily_stats(device_id, state)
@@ -417,7 +443,7 @@ class DahuaTrafficCollector:
                 if state.last_device_today_out > 0:
                     delta_out = max(0, device_today_out - state.last_device_today_out)
 
-                # 更新状态
+                # 更新内存状态（锁内只做内存更新，不做 DB）
                 state.today_entered = device_today_in
                 state.today_exited = device_today_out
                 state.current_inside = device_inside
@@ -430,25 +456,43 @@ class DahuaTrafficCollector:
                 state.hourly_exited += delta_out
                 state.hourly_inside_samples.append(device_inside)
 
-                # 更新累计统计
-                self._update_cumulative_stats(device_id, state)
+                # 记录是否需要写 cumulative 和 record
+                _record_delta_in = delta_in
+                _record_delta_out = delta_out
+                _record_date = current_date
+                _record_hour = current_hour
 
-                # 实时保存小时增量
-                if delta_in > 0 or delta_out > 0:
-                    self._save_traffic_record(
-                        device_id=device_id,
-                        date_str=current_date,
-                        hour=current_hour,
-                        count_in=delta_in,
-                        count_out=delta_out,
-                    )
+            # ── 阶段2: 锁外做 DB 写入（节流+批量） ──
+
+            # 累计统计写入（3 秒节流）
+            t_now = time.monotonic()
+            last_write = self._last_cumulative_write.get(device_id, 0.0)
+            if t_now - last_write >= self.CUMULATIVE_WRITE_INTERVAL:
+                self._last_cumulative_write[device_id] = t_now
+                with self._lock:
+                    st = self._devices.get(device_id)
+                if st:
+                    self._update_cumulative_stats(device_id, st)
+
+            # 增量记录缓存 + 批量 flush
+            if _record_delta_in > 0 or _record_delta_out > 0:
+                self._buffer_traffic_record(
+                    device_id=device_id,
+                    date_str=_record_date,
+                    hour=_record_hour,
+                    count_in=_record_delta_in,
+                    count_out=_record_delta_out,
+                )
 
             # 每5分钟记录一次日志
             if now.minute % 5 == 0 and now.second < 5:
-                logger.info(
-                    f"[{device_id}] 客流统计: 今日进={state.today_entered}, "
-                    f"今日出={state.today_exited}, 当前在场={state.current_inside}"
-                )
+                with self._lock:
+                    st = self._devices.get(device_id)
+                if st:
+                    logger.info(
+                        f"[{device_id}] 客流统计: 今日进={st.today_entered}, "
+                        f"今日出={st.today_exited}, 当前在场={st.current_inside}"
+                    )
 
         except Exception as exc:
             logger.error(f"[{device_id}] 处理客流数据失败: {exc}")
@@ -654,6 +698,81 @@ class DahuaTrafficCollector:
 
         except Exception as exc:
             logger.error(f"[{device_id}] 保存客流记录失败: {exc}")
+
+    def _buffer_traffic_record(
+        self,
+        device_id: str,
+        date_str: str,
+        hour: int,
+        count_in: int,
+        count_out: int,
+    ):
+        """缓存增量记录，按 RECORD_FLUSH_INTERVAL 批量写入 DB"""
+        # 合并增量到缓存
+        key = (device_id, date_str, hour)
+        cached = self._pending_records.get(key)
+        if cached:
+            _, _, acc_in, acc_out = cached
+            self._pending_records[key] = (date_str, hour, acc_in + count_in, acc_out + count_out)
+        else:
+            self._pending_records[key] = (date_str, hour, count_in, count_out)
+
+        # 检查是否需要 flush
+        t_now = time.monotonic()
+        last_flush = self._last_record_flush.get(device_id, 0.0)
+        if t_now - last_flush >= self.RECORD_FLUSH_INTERVAL:
+            self._last_record_flush[device_id] = t_now
+            self._flush_pending_records(device_id)
+
+    def _flush_pending_records(self, device_id: str):
+        """批量写入缓存的增量记录"""
+        flush_keys = [k for k in self._pending_records if k[0] == device_id]
+        if not flush_keys:
+            return
+
+        try:
+            from database import get_session_factory
+            from models import TrafficRecord
+            import uuid
+
+            SessionFactory = get_session_factory()
+            with SessionFactory() as session:
+                for key in flush_keys:
+                    cached = self._pending_records.pop(key, None)
+                    if cached is None:
+                        continue
+                    _, hour, acc_in, acc_out = cached
+                    record = session.query(TrafficRecord).filter_by(
+                        deviceId=device_id,
+                        date=key[1],
+                        hour=hour,
+                    ).first()
+
+                    if record:
+                        record.countIn = (record.countIn or 0) + acc_in
+                        record.countOut = (record.countOut or 0) + acc_out
+                        record.updatedAt = datetime.utcnow()
+                    else:
+                        record = TrafficRecord(
+                            id=uuid.uuid4().hex[:25],
+                            deviceId=device_id,
+                            date=key[1],
+                            hour=hour,
+                            countIn=acc_in,
+                            countOut=acc_out,
+                        )
+                        session.add(record)
+
+                session.commit()
+
+        except Exception as exc:
+            logger.error(f"[{device_id}] 批量写入客流记录失败: {exc}")
+
+    def _flush_all_pending_records(self):
+        """flush 所有设备的缓存记录（stop_all 时调用）"""
+        device_ids = set(k[0] for k in self._pending_records)
+        for did in device_ids:
+            self._flush_pending_records(did)
 
     def _update_device_status(self, device_id: str, status: str):
         """同步设备状态到数据库"""
