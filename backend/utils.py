@@ -3,162 +3,163 @@ FluxaVision 客流统计系统 - 工具函数
 """
 import hashlib
 import platform
-import uuid
-import subprocess
+import ctypes
+import ctypes.wintypes
+import logging
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
 
-def _get_wmi_value(wmi_query: str, field: str, timeout: int = 5) -> str:
+
+def _get_physical_disk_serial_win32() -> str:
     """
-    通过 WMI 查询获取硬件信息 (Windows 专用)
+    通过 Win32 API (CreateFile + DeviceIoControl) 读取第一块物理硬盘序列号。
 
-    参数:
-        wmi_query: WMI 查询语句, 如 "SELECT UUID FROM Win32_ComputerSystemProduct"
-        field: 要提取的字段名
-        timeout: 超时秒数
+    绝不使用 WMI/wmic，直接调用 Windows 内核 API：
+      CreateFile(\\.\\\\PhysicalDrive0) → DeviceIoControl(IOCTL_STORAGE_QUERY_PROPERTY)
+      → STORAGE_DEVICE_DESCRIPTOR.SerialNumberOffset → serial number
 
-    返回:
-        查询结果字符串, 失败返回空字符串
+    Returns:
+        硬盘序列号字符串，失败返回空字符串
     """
+    # 仅在 Windows 上执行
+    if platform.system() != "Windows":
+        return ""
+
+    # --- Win32 常量 ---
+    GENERIC_READ = 0x80000000
+    FILE_SHARE_READ = 0x00000001
+    FILE_SHARE_WRITE = 0x00000002
+    OPEN_EXISTING = 3
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+    # CTL_CODE(IOCTL_STORAGE_BASE, 0x0500, METHOD_BUFFERED, FILE_ANY_ACCESS)
+    IOCTL_STORAGE_QUERY_PROPERTY = 0x002D1400
+
+    kernel32 = ctypes.windll.kernel32
+
+    # --- 打开 PhysicalDrive0 ---
+    # 使用原始字符串避免转义问题: r"\\.\PhysicalDrive0"
+    device_path = "\x5c\x5c\x2e\x5cPhysicalDrive0"
+
+    handle = kernel32.CreateFileW(
+        device_path,
+        GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        None,
+        OPEN_EXISTING,
+        0,
+        None,
+    )
+    if handle == INVALID_HANDLE_VALUE:
+        logger.warning("无法打开 \\\\\\.PhysicalDrive0 (权限不足或不存在)")
+        return ""
+
     try:
-        result = subprocess.run(
-            ["wmic", wmi_query],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0,
+        # --- STORAGE_PROPERTY_QUERY (PropertyId=StorageDeviceProperty, QueryType=PropertyStandardQuery) ---
+        class STORAGE_PROPERTY_QUERY(ctypes.Structure):
+            _fields_ = [
+                ("PropertyId", ctypes.wintypes.DWORD),
+                ("QueryType", ctypes.wintypes.DWORD),
+                ("AdditionalParameters", ctypes.c_byte * 1),
+            ]
+
+        query = STORAGE_PROPERTY_QUERY()
+        query.PropertyId = 0  # StorageDeviceProperty
+        query.QueryType = 0  # PropertyStandardQuery
+        query.AdditionalParameters = (ctypes.c_byte * 1)(0)
+
+        # --- 输出缓冲区 (足够大) ---
+        out_buffer_size = 4096
+        out_buffer = ctypes.create_string_buffer(out_buffer_size)
+        bytes_returned = ctypes.wintypes.DWORD(0)
+
+        # --- DeviceIoControl ---
+        result = kernel32.DeviceIoControl(
+            handle,
+            IOCTL_STORAGE_QUERY_PROPERTY,
+            ctypes.byref(query),
+            ctypes.sizeof(query),
+            out_buffer,
+            out_buffer_size,
+            ctypes.byref(bytes_returned),
+            None,
         )
-        lines = result.stdout.strip().split("\n")
-        if len(lines) >= 2:
-            value = lines[1].strip()
-            if value and value != field:
-                return value
-    except Exception:
-        pass
-    return ""
 
+        if not result:
+            logger.warning("DeviceIoControl 查询硬盘序列号失败")
+            return ""
 
-def _get_first_physical_disk_serial() -> str:
-    """获取第一块物理硬盘序列号"""
-    try:
-        flags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-        result = subprocess.run(
-            ["wmic", "diskdrive", "get", "SerialNumber"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            creationflags=flags,
-        )
-        lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]
-        # 跳过表头 "SerialNumber"
-        if len(lines) >= 2:
-            return lines[1]
-    except Exception:
-        pass
-    return ""
+        # --- 解析 STORAGE_DEVICE_DESCRIPTOR ---
+        class STORAGE_DEVICE_DESCRIPTOR(ctypes.Structure):
+            _fields_ = [
+                ("Version", ctypes.wintypes.DWORD),
+                ("Size", ctypes.wintypes.DWORD),
+                ("DeviceType", ctypes.c_byte),
+                ("DeviceTypeModifier", ctypes.c_byte),
+                ("RemovableMedia", ctypes.c_byte),
+                ("CommandQueueing", ctypes.c_byte),
+                ("VendorIdOffset", ctypes.wintypes.DWORD),
+                ("ProductIdOffset", ctypes.wintypes.DWORD),
+                ("ProductRevisionOffset", ctypes.wintypes.DWORD),
+                ("SerialNumberOffset", ctypes.wintypes.DWORD),
+                ("BusType", ctypes.wintypes.DWORD),
+                ("RawPropertiesLength", ctypes.wintypes.DWORD),
+                ("RawDeviceProperties", ctypes.c_byte * 1),
+            ]
 
+        descriptor = STORAGE_DEVICE_DESCRIPTOR.from_buffer(out_buffer)
+        serial_offset = descriptor.SerialNumberOffset
 
-def _get_primary_mac() -> str:
-    """获取主网卡 MAC 地址 (通过 getmac 命令, 比 uuid.getnode() 更可靠)"""
-    try:
-        flags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
-        result = subprocess.run(
-            ["getmac", "/fo", "csv", "/nh"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            creationflags=flags,
-        )
-        # CSV 格式: "设备名","MAC地址","传输类型"
-        for line in result.stdout.strip().split("\n"):
-            parts = line.strip().strip('"').split('","')
-            if len(parts) >= 2 and parts[1] != "N/A" and "-" in parts[1]:
-                return parts[1].replace("-", "").upper()
-    except Exception:
-        pass
-    return ""
+        if serial_offset == 0:
+            logger.warning("硬盘序列号偏移量为 0，无法获取序列号")
+            return ""
+
+        # 序列号在偏移位置，以 null 结尾的 ASCII/UTF-16LE 字符串
+        raw_bytes = out_buffer.raw
+        null_pos = raw_bytes.find(b"\x00", serial_offset)
+        if null_pos == -1:
+            serial_bytes = raw_bytes[serial_offset:]
+        else:
+            serial_bytes = raw_bytes[serial_offset:null_pos]
+
+        serial = serial_bytes.decode("utf-8", errors="replace").strip()
+        if serial:
+            logger.info(f"硬盘物理序列号已读取: {serial[:8]}...")
+            return serial
+
+        logger.warning("硬盘序列号内容为空")
+        return ""
+
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def generate_hardware_fingerprint() -> str:
     """
-    生成稳定的硬件指纹 (Windows 优化版)
+    生成机器硬件指纹（方案B：硬盘物理序列号）。
 
-    采集策略 (按稳定性排序):
-      1. 主板 UUID (wmic csproduct get UUID) — 换主板才变
-      2. BIOS 序列号 (wmic bios get SerialNumber) — 极少变
-      3. CPU ProcessorId (wmic cpu get ProcessorId) — 换CPU才变
-      4. 第一块物理硬盘序列号 — 换硬盘才变
-      5. 主网卡 MAC (getmac) — 换网卡才变
-      6. 主机名 (platform.node) — 可能被修改
+    策略:
+      Windows: 通过 Win32 API (CreateFile + DeviceIoControl) 读取
+      \\.\\\\PhysicalDrive0 的序列号，SHA-256 哈希生成指纹
+      绝不使用 WMI/wmic
 
-    算法:
-      所有采集到的非空因子用 | 连接
-      SHA-256 → 取前 32 字符 → 大写
+      Linux/macOS: 回退到主机名+架构的组合
 
-    稳定性保证:
-      - 至少需要 2 个因子才生成有效指纹
-      - 主板UUID + BIOS序列号 两个因子就能保证跨重启稳定
-      - 更换个别硬件不影响指纹 (除非更换 >= 半数因子)
+    Returns:
+        64 字符 hex 字符串 (SHA-256 全长度)
     """
-    factors = []
+    if platform.system() == "Windows":
+        serial = _get_physical_disk_serial_win32()
+        if serial:
+            fingerprint = hashlib.sha256(serial.encode("utf-8")).hexdigest()
+            logger.info(f"硬件指纹已生成 (硬盘序列号) : {fingerprint[:16]}...")
+            return fingerprint
+        logger.warning("Win32 API 获取硬盘序列号失败，回退到主机名")
 
-    # === Windows WMI 查询 (最可靠) ===
-    is_windows = platform.system() == "Windows"
-
-    if is_windows:
-        # 1. 主板 UUID (最稳定)
-        board_uuid = _get_wmi_value("csproduct get UUID", "UUID")
-        if board_uuid:
-            factors.append(f"BOARD:{board_uuid}")
-
-        # 2. BIOS 序列号
-        bios_serial = _get_wmi_value("bios get SerialNumber", "SerialNumber")
-        if bios_serial:
-            factors.append(f"BIOS:{bios_serial}")
-
-        # 3. CPU ProcessorId
-        cpu_id = _get_wmi_value("cpu get ProcessorId", "ProcessorId")
-        if cpu_id:
-            factors.append(f"CPU:{cpu_id}")
-
-        # 4. 硬盘序列号
-        disk_serial = _get_first_physical_disk_serial()
-        if disk_serial:
-            factors.append(f"DISK:{disk_serial}")
-
-        # 5. 主网卡 MAC
-        mac = _get_primary_mac()
-        if mac:
-            factors.append(f"MAC:{mac}")
-
-    # === 通用平台回退 (非 Windows 或 WMI 不可用) ===
-    if not factors or len(factors) < 2:
-        # 补充 platform 模块信息
-        node = platform.node() or "unknown"
-        machine = platform.machine() or "unknown"
-        proc = platform.processor() or "unknown"
-        mac_fallback = f"{uuid.getnode():012X}"
-
-        if f"HOST:{node}" not in factors:
-            factors.append(f"HOST:{node}")
-        if f"ARCH:{machine}" not in factors:
-            factors.append(f"ARCH:{machine}")
-        if proc and f"PROC:{proc}" not in factors:
-            factors.append(f"PROC:{proc}")
-        if mac_fallback and f"MAC:{mac_fallback}" not in factors:
-            factors.append(f"MAC:{mac_fallback}")
-
-    # 去重并排序 (保证相同因子无论采集顺序如何都产生相同结果)
-    factors = sorted(set(factors))
-
-    if len(factors) < 2:
-        # 极端情况: 所有硬件信息都获取不到
-        factors = [f"FALLBACK:{platform.node()}", f"FALLBACK:{platform.machine()}"]
-
-    # 带前缀 + SHA-256 + 截取32字符 + 大写
-    raw = f"fluxavision-hw-{'|'.join(factors)}"
-    fingerprint = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32].upper()
-
+    # 回退：主机名 + 机器架构（跨平台兼容）
+    raw = f"{platform.node() or 'unknown'}|{platform.machine() or 'unknown'}"
+    fingerprint = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    logger.warning(f"硬件指纹使用回退方案 : {fingerprint[:16]}...")
     return fingerprint
 
 
